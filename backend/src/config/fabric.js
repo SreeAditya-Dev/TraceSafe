@@ -171,8 +171,8 @@ export class FabricService {
         }
 
         try {
-            const result = await this.contract.submitTransaction(
-                'RecordPickup',
+            const transaction = this.contract.createTransaction('RecordPickup');
+            const result = await transaction.submit(
                 batchId,
                 driverName,
                 String(lat || 0),
@@ -182,7 +182,7 @@ export class FabricService {
 
             return {
                 success: true,
-                txId: this.getTransactionId(),
+                txId: transaction.getTransactionId(),
                 result: result.toString()
             };
         } catch (error) {
@@ -231,8 +231,8 @@ export class FabricService {
         }
 
         try {
-            const result = await this.contract.submitTransaction(
-                'RecordDelivery',
+            const transaction = this.contract.createTransaction('RecordDelivery');
+            const result = await transaction.submit(
                 batchId,
                 driverName,
                 retailerName || '',
@@ -243,7 +243,7 @@ export class FabricService {
 
             return {
                 success: true,
-                txId: this.getTransactionId(),
+                txId: transaction.getTransactionId(),
                 result: result.toString()
             };
         } catch (error) {
@@ -261,8 +261,8 @@ export class FabricService {
         }
 
         try {
-            const result = await this.contract.submitTransaction(
-                'RecordReceipt',
+            const transaction = this.contract.createTransaction('RecordReceipt');
+            const result = await transaction.submit(
                 batchId,
                 retailerName,
                 String(lat || 0),
@@ -272,7 +272,7 @@ export class FabricService {
 
             return {
                 success: true,
-                txId: this.getTransactionId(),
+                txId: transaction.getTransactionId(),
                 result: result.toString()
             };
         } catch (error) {
@@ -403,15 +403,18 @@ export class FabricService {
     }
 }
 
-// Singleton instance
-let fabricServiceInstance = null;
+// Per-org service instances
+const fabricServiceInstances = {};
 
 /**
- * Get or create FabricService instance
+ * Get or create FabricService instance for a specific role/org
+ * @param {string} role - User role (farmer, driver, retailer, admin)
  */
-export function getFabricService() {
-    if (!fabricServiceInstance) {
-        fabricServiceInstance = new FabricService();
+export function getFabricService(role = 'farmer') {
+    const orgKey = role.toLowerCase();
+    if (!fabricServiceInstances[orgKey]) {
+        fabricServiceInstances[orgKey] = new FabricService();
     }
-    return fabricServiceInstance;
+    return fabricServiceInstances[orgKey];
 }
+

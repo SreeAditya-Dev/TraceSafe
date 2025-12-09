@@ -10,22 +10,24 @@ import { getFabricService } from '../config/fabric.js';
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Fabric service singleton - connects on first use
-let fabricConnected = false;
+// Per-role Fabric connection tracking
+const fabricConnectedByRole = {};
+
 const tryConnectFabric = async (role) => {
-    const fabricService = getFabricService();
+    const fabricService = getFabricService(role);
     if (!fabricService.isConnected()) {
         try {
-            fabricConnected = await fabricService.connect(role);
-            if (fabricConnected) {
-                console.log('✅ Connected to Hyperledger Fabric network');
+            const connected = await fabricService.connect(role);
+            fabricConnectedByRole[role] = connected;
+            if (connected) {
+                console.log(`✅ Connected to Hyperledger Fabric network as ${role}`);
             }
         } catch (err) {
-            console.log('⚠️ Fabric network not available, using PostgreSQL only');
-            fabricConnected = false;
+            console.log(`⚠️ Fabric network not available for ${role}, using PostgreSQL only`);
+            fabricConnectedByRole[role] = false;
         }
     }
-    return fabricConnected ? fabricService : null;
+    return fabricConnectedByRole[role] ? fabricService : null;
 };
 
 // Generate batch ID
@@ -387,10 +389,30 @@ router.post('/:batchId/pickup', authenticate, requireRole('driver'), async (req,
             notes || `Picked up by driver ${driver.name}`]
         );
 
+        // Record on blockchain
+        let blockchainTxId = null;
+        try {
+            const fabricService = await tryConnectFabric('driver');
+            if (fabricService) {
+                const fabricResult = await fabricService.recordPickup(
+                    batchId,
+                    driver.name,
+                    parseFloat(latitude) || 0,
+                    parseFloat(longitude) || 0,
+                    notes || ''
+                );
+                blockchainTxId = fabricResult.txId;
+                console.log(`✅ Pickup ${batchId} recorded on blockchain: ${blockchainTxId}`);
+            }
+        } catch (fabricErr) {
+            console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', fabricErr.message);
+        }
+
         res.json({
             message: 'Batch picked up successfully',
             batch_id: batchId,
             status: 'in_transit',
+            blockchain_tx_id: blockchainTxId,
         });
     } catch (err) {
         console.error('Pickup error:', err);
@@ -436,10 +458,31 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), async (req
             notes || `Delivered by driver ${driver.name}`]
         );
 
+        // Record on blockchain
+        let blockchainTxId = null;
+        try {
+            const fabricService = await tryConnectFabric('driver');
+            if (fabricService) {
+                const fabricResult = await fabricService.recordDelivery(
+                    batchId,
+                    driver.name,
+                    '',  // retailerName not available here
+                    parseFloat(latitude) || 0,
+                    parseFloat(longitude) || 0,
+                    notes || ''
+                );
+                blockchainTxId = fabricResult.txId;
+                console.log(`✅ Delivery ${batchId} recorded on blockchain: ${blockchainTxId}`);
+            }
+        } catch (fabricErr) {
+            console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', fabricErr.message);
+        }
+
         res.json({
             message: 'Batch delivered successfully',
             batch_id: batchId,
             status: 'delivered',
+            blockchain_tx_id: blockchainTxId,
         });
     } catch (err) {
         console.error('Deliver error:', err);
@@ -502,10 +545,30 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
             notes || `Received by retailer ${retailer.name}`]
         );
 
+        // Record on blockchain
+        let blockchainTxId = null;
+        try {
+            const fabricService = await tryConnectFabric('retailer');
+            if (fabricService) {
+                const fabricResult = await fabricService.recordReceipt(
+                    batchId,
+                    retailer.name,
+                    parseFloat(latitude) || 0,
+                    parseFloat(longitude) || 0,
+                    notes || ''
+                );
+                blockchainTxId = fabricResult.txId;
+                console.log(`✅ Receipt ${batchId} recorded on blockchain: ${blockchainTxId}`);
+            }
+        } catch (fabricErr) {
+            console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', fabricErr.message);
+        }
+
         res.json({
             message: 'Batch received successfully',
             batch_id: batchId,
             status: 'received',
+            blockchain_tx_id: blockchainTxId,
         });
     } catch (err) {
         console.error('Receive error:', err);

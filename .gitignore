@@ -140,3 +140,5 @@ fabric/chaincode/**/tracesafe
 *.block
 *.tx
 *.tar.gz
+fabric/wallets/
+fabric/connection-profiles/
