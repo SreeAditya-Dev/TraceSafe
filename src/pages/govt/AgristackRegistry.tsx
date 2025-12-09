@@ -3,6 +3,7 @@ import GovtBreadcrumb from "@/components/govt/GovtBreadcrumb";
 import GovtTable from "@/components/govt/GovtTable";
 import { agristackAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { exportToCSV, downloadPDFReport, printTableData } from "@/utils/exportUtils";
 
 const AgristackRegistry = () => {
   const { toast } = useToast();
@@ -210,8 +211,24 @@ const AgristackRegistry = () => {
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <button className="govt-btn-secondary">Print Profile</button>
-            <button className="govt-btn-secondary">Download PDF</button>
+            <button
+              className="govt-btn-secondary"
+              onClick={() => printTableData('Farmer Profile', [
+                { key: 'field', header: 'Field' },
+                { key: 'value', header: 'Value' }
+              ], [
+                { field: 'Farmer ID', value: searchResult.farmer_id },
+                { field: 'Name', value: searchResult.name },
+                { field: 'Land', value: searchResult.land },
+                { field: 'Crops', value: searchResult.crops },
+                { field: 'Registry Status', value: searchResult.registry_status },
+                { field: 'Verified', value: searchResult.verified ? 'Yes' : 'No' }
+              ])}
+            >Print Profile</button>
+            <button
+              className="govt-btn-secondary"
+              onClick={() => downloadPDFReport('Farmer Profile Report', searchResult, 'farmer')}
+            >Download PDF</button>
           </div>
         </div>
       )}
@@ -220,7 +237,10 @@ const AgristackRegistry = () => {
         <div className="flex justify-between items-center mb-4 pb-2 border-b border-border">
           <h2 className="text-base font-semibold m-0">Registry Statistics</h2>
           <div>
-            <button className="govt-btn-secondary">Export Data</button>
+            <button
+              className="govt-btn-secondary"
+              onClick={() => exportToCSV(registryStatsData, 'agristack_stats', registryStatsColumns)}
+            >Export Data</button>
           </div>
         </div>
         <GovtTable columns={registryStatsColumns} data={registryStatsData} />
@@ -233,7 +253,21 @@ const AgristackRegistry = () => {
         <div className="flex justify-between items-center mb-4 pb-2 border-b border-border">
           <h2 className="text-base font-semibold m-0">Registered Farmers List</h2>
           <div>
-            <button className="govt-btn-secondary">Download List</button>
+            <button
+              className="govt-btn-secondary"
+              onClick={() => exportToCSV(
+                farmersList.map((f: any) => ({ ...f, verified: f.verified ? 'Yes' : 'No' })),
+                'agristack_farmers',
+                [
+                  { key: 'farmer_id', header: 'Farmer ID' },
+                  { key: 'name', header: 'Name' },
+                  { key: 'land', header: 'Land' },
+                  { key: 'crops', header: 'Crops' },
+                  { key: 'verified', header: 'Verified' },
+                  { key: 'registry_status', header: 'Registry Status' }
+                ]
+              )}
+            >Download List</button>
           </div>
         </div>
         {isLoadingList ? (

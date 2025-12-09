@@ -3,6 +3,7 @@ import GovtBreadcrumb from "@/components/govt/GovtBreadcrumb";
 import GovtTable from "@/components/govt/GovtTable";
 import { govtAPI, batchAPI } from "@/services/api";
 import { commodityOptions, stateOptions } from "@/data/govtData";
+import { exportToCSV, printTableData } from "@/utils/exportUtils";
 
 const EnamDashboard = () => {
   const [selectedCommodity, setSelectedCommodity] = useState("All Commodities");
@@ -142,8 +143,14 @@ const EnamDashboard = () => {
         <div className="flex justify-between items-center mb-4 pb-2 border-b border-border">
           <h2 className="text-base font-semibold m-0">Commodity Price Information</h2>
           <div>
-            <button className="govt-btn-secondary mr-2">Print</button>
-            <button className="govt-btn-secondary">Download</button>
+            <button
+              className="govt-btn-secondary mr-2"
+              onClick={() => printTableData('e-NAM Commodity Prices', priceColumns, filteredPrices)}
+            >Print</button>
+            <button
+              className="govt-btn-secondary"
+              onClick={() => exportToCSV(filteredPrices, 'enam_prices', priceColumns)}
+            >Download</button>
           </div>
         </div>
         {isLoading ? (
@@ -160,8 +167,38 @@ const EnamDashboard = () => {
         <div className="flex justify-between items-center mb-4 pb-2 border-b border-border">
           <h2 className="text-base font-semibold m-0">TraceSafe Batch Data</h2>
           <div>
-            <button className="govt-btn-secondary mr-2">Print</button>
-            <button className="govt-btn-secondary">Download</button>
+            <button
+              className="govt-btn-secondary mr-2"
+              onClick={() => printTableData('TraceSafe Batch Data', [
+                { key: 'batch_id', header: 'Batch ID' },
+                { key: 'crop', header: 'Commodity' },
+                { key: 'farmer_name', header: 'Farmer Name' },
+                { key: 'created_at', header: 'Dispatch Date' },
+                { key: 'status', header: 'Status' }
+              ], filteredBatches.map((b: any) => ({
+                ...b,
+                created_at: new Date(b.created_at).toLocaleDateString(),
+                status: b.status.replace('_', ' ').toUpperCase()
+              })))}
+            >Print</button>
+            <button
+              className="govt-btn-secondary"
+              onClick={() => exportToCSV(
+                filteredBatches.map((b: any) => ({
+                  ...b,
+                  created_at: new Date(b.created_at).toLocaleDateString(),
+                  status: b.status.replace('_', ' ').toUpperCase()
+                })),
+                'tracesafe_batches',
+                [
+                  { key: 'batch_id', header: 'Batch ID' },
+                  { key: 'crop', header: 'Commodity' },
+                  { key: 'farmer_name', header: 'Farmer Name' },
+                  { key: 'created_at', header: 'Dispatch Date' },
+                  { key: 'status', header: 'Status' }
+                ]
+              )}
+            >Download</button>
           </div>
         </div>
         {isLoading ? (

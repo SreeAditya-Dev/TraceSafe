@@ -4,6 +4,7 @@ import GovtTable from "@/components/govt/GovtTable";
 import { govtAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { recallNotices } from "@/data/govtData"; // Keeping recall notices static for now
+import { exportToCSV, printTableData } from "@/utils/exportUtils";
 
 const FssaiCompliance = () => {
   const { toast } = useToast();
@@ -178,8 +179,26 @@ const FssaiCompliance = () => {
         <div className="flex justify-between items-center mb-4 pb-2 border-b border-border">
           <h2 className="text-base font-semibold m-0">Batch Compliance Status</h2>
           <div>
-            <button className="govt-btn-secondary mr-2">Print Report</button>
-            <button className="govt-btn-secondary">Download CSV</button>
+            <button
+              className="govt-btn-secondary mr-2"
+              onClick={() => printTableData('FSSAI Batch Compliance Report', [
+                { key: 'batchId', header: 'Batch ID' },
+                { key: 'commodity', header: 'Commodity' },
+                { key: 'riskAssessment', header: 'Risk Assessment' },
+                { key: 'status', header: 'Status' },
+                { key: 'lastUpdated', header: 'Last Updated' }
+              ], complianceData)}
+            >Print Report</button>
+            <button
+              className="govt-btn-secondary"
+              onClick={() => exportToCSV(complianceData, 'fssai_compliance', [
+                { key: 'batchId', header: 'Batch ID' },
+                { key: 'commodity', header: 'Commodity' },
+                { key: 'riskAssessment', header: 'Risk Assessment' },
+                { key: 'status', header: 'Status' },
+                { key: 'lastUpdated', header: 'Last Updated' }
+              ])}
+            >Download CSV</button>
           </div>
         </div>
         {isLoadingCompliance ? (

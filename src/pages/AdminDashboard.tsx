@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { statsAPI, batchAPI, agristackAPI } from '@/services/api';
@@ -10,21 +10,11 @@ import {
     Shield, Package, Truck, Store, Users, LogOut,
     BarChart3, MapPin, RefreshCw, ExternalLink, Leaf, CheckCircle
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
-// Fix Leaflet default marker icon
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
-const DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || 'pk.eyJ1Ijoic3JlZWFkaXR5YWRldiIsImEiOiJjbTRpNGRocmcwMGo1MmxzYnU5cWZlbmRjIn0.YWV6AzSWOvKqPROGNJpOPQ';
+mapboxgl.accessToken = MAPBOX_TOKEN;
 
 interface Stats {
     batches: {
@@ -72,6 +62,9 @@ const AdminDashboard: React.FC = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const { toast } = useToast();
+    const mapContainerRef = useRef<HTMLDivElement>(null);
+    const mapRef = useRef<mapboxgl.Map | null>(null);
+    const markersRef = useRef<mapboxgl.Marker[]>([]);
 
     const [stats, setStats] = useState<Stats | null>(null);
     const [batches, setBatches] = useState<Batch[]>([]);
@@ -144,15 +137,64 @@ const AdminDashboard: React.FC = () => {
         return colors[status] || 'bg-gray-500';
     };
 
-    // Get batch coordinates for map
-    const batchCoordinates = batches
-        .filter(b => b.origin_latitude && b.origin_longitude)
-        .map(b => ({
-            position: [b.origin_latitude, b.origin_longitude] as [number, number],
-            batch: b,
-        }));
+    const defaultCenter: [number, number] = [78.9629, 20.5937]; // India center [lng, lat]
 
-    const defaultCenter: [number, number] = [20.5937, 78.9629]; // India center
+    // Initialize Mapbox map when overview tab is active
+    useEffect(() => {
+        if (activeTab !== 'overview' || !mapContainerRef.current) return;
+        if (mapRef.current) return; // Already initialized
+
+        const map = new mapboxgl.Map({
+            container: mapContainerRef.current,
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: defaultCenter,
+            zoom: 5,
+        });
+
+        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+        mapRef.current = map;
+
+        return () => {
+            mapRef.current?.remove();
+            mapRef.current = null;
+        };
+    }, [activeTab]);
+
+    // Update markers when batches change
+    useEffect(() => {
+        if (!mapRef.current || activeTab !== 'overview') return;
+
+        // Clear existing markers
+        markersRef.current.forEach(marker => marker.remove());
+        markersRef.current = [];
+
+        const batchesWithCoords = batches.filter(b => b.origin_latitude && b.origin_longitude);
+
+        // Add new markers
+        batchesWithCoords.forEach((batch) => {
+            const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+                <div style="padding: 8px;">
+                    <strong style="font-size: 14px;">${batch.crop}</strong><br/>
+                    <span style="color: #666;">${batch.batch_id}</span><br/>
+                    <span style="color: #888;">${batch.farmer_name || 'Unknown Farmer'}</span>
+                </div>
+            `);
+
+            const marker = new mapboxgl.Marker({ color: '#ef4444' })
+                .setLngLat([batch.origin_longitude, batch.origin_latitude])
+                .setPopup(popup)
+                .addTo(mapRef.current!);
+
+            markersRef.current.push(marker);
+        });
+
+        // Fit bounds if we have batches
+        if (batchesWithCoords.length > 0) {
+            const bounds = new mapboxgl.LngLatBounds();
+            batchesWithCoords.forEach(b => bounds.extend([b.origin_longitude, b.origin_latitude]));
+            mapRef.current.fitBounds(bounds, { padding: 50 });
+        }
+    }, [batches, activeTab]);
 
     if (isLoading) {
         return (
@@ -193,8 +235,8 @@ const AdminDashboard: React.FC = () => {
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
                                 className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                        ? 'border-red-500 text-red-600'
-                                        : 'border-transparent text-gray-600 hover:text-gray-900'
+                                    ? 'border-red-500 text-red-600'
+                                    : 'border-transparent text-gray-600 hover:text-gray-900'
                                     }`}
                             >
                                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -281,25 +323,10 @@ const AdminDashboard: React.FC = () => {
                             </CardHeader>
                             <CardContent>
                                 <div className="h-96 rounded-lg overflow-hidden">
-                                    <MapContainer
-                                        center={batchCoordinates[0]?.position || defaultCenter}
-                                        zoom={5}
+                                    <div
+                                        ref={mapContainerRef}
                                         style={{ height: '100%', width: '100%' }}
-                                    >
-                                        <TileLayer
-                                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                        />
-                                        {batchCoordinates.map(({ position, batch }, idx) => (
-                                            <Marker key={idx} position={position}>
-                                                <Popup>
-                                                    <strong>{batch.crop}</strong><br />
-                                                    {batch.batch_id}<br />
-                                                    {batch.farmer_name || 'Unknown Farmer'}
-                                                </Popup>
-                                            </Marker>
-                                        ))}
-                                    </MapContainer>
+                                    />
                                 </div>
                             </CardContent>
                         </Card>
