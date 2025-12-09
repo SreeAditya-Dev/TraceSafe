@@ -392,8 +392,10 @@ void loop() {
   }
 
   if (now - lastSend >= SEND_INTERVAL_MS) {
-    bool ok = sendToBackend();
-    if (!ok) Serial.println("Send failed or no backend configured");
+    if (WiFi.status() == WL_CONNECTED) {
+      bool ok = sendToBackend();
+      if (!ok) Serial.println("Send failed");
+    }
     lastSend = now;
   }
 
