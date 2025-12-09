@@ -5,9 +5,28 @@ import multer from 'multer';
 import { query } from '../config/database.js';
 import { authenticate, requireRole, optionalAuth } from '../middleware/auth.js';
 import { uploadFile } from '../config/minio.js';
+import { getFabricService } from '../config/fabric.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Fabric service singleton - connects on first use
+let fabricConnected = false;
+const tryConnectFabric = async (role) => {
+    const fabricService = getFabricService();
+    if (!fabricService.isConnected()) {
+        try {
+            fabricConnected = await fabricService.connect(role);
+            if (fabricConnected) {
+                console.log('✅ Connected to Hyperledger Fabric network');
+            }
+        } catch (err) {
+            console.log('⚠️ Fabric network not available, using PostgreSQL only');
+            fabricConnected = false;
+        }
+    }
+    return fabricConnected ? fabricService : null;
+};
 
 // Generate batch ID
 const generateBatchId = (crop) => {
@@ -95,17 +114,56 @@ router.post('/', authenticate, requireRole('farmer'), upload.array('images', 5),
             ]
         );
 
+        // Write to Hyperledger Fabric blockchain
+        let blockchainTxId = null;
+        try {
+            const fabricService = await tryConnectFabric('farmer');
+            if (fabricService) {
+                const fabricResult = await fabricService.createBatch({
+                    batchId,
+                    farmerId: farmer.id,
+                    farmerName: farmer.name,
+                    agriStackId: farmer.agristack_id || '',
+                    crop,
+                    variety: variety || '',
+                    quantity: parseFloat(quantity),
+                    unit: unit || 'kg',
+                    harvestDate: harvestDate || new Date().toISOString(),
+                    originLat: parseFloat(latitude) || 0,
+                    originLng: parseFloat(longitude) || 0,
+                    originAddress: address || '',
+                });
+                blockchainTxId = fabricResult.txId;
+                console.log(`✅ Batch ${batchId} recorded on blockchain: ${blockchainTxId}`);
+
+                // Update batch with blockchain txId
+                await query(
+                    'UPDATE batches SET blockchain_tx_id = $1 WHERE id = $2',
+                    [blockchainTxId, batch.id]
+                );
+            }
+        } catch (fabricErr) {
+            console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', fabricErr.message);
+        }
+
         res.status(201).json({
             message: 'Batch created successfully',
             batch: {
                 ...batch,
                 qr_code_data_url: qrCodeDataUrl,
+                blockchain_tx_hash: blockchainTxId,
             },
             farmer: {
                 id: farmer.id,
                 name: farmer.name,
                 agristack_id: farmer.agristack_id,
             },
+            blockchain: blockchainTxId ? {
+                network: 'Hyperledger Fabric',
+                channel: 'tracesafe-channel',
+                chaincode: 'tracesafe',
+                txId: blockchainTxId,
+            } : null,
         });
     } catch (err) {
         console.error('Create batch error:', err);

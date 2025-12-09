@@ -1,0 +1,44 @@
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Crypto configuration for TraceSafe Fabric Network
+
+OrdererOrgs:
+  - Name: Orderer
+    Domain: tracesafe.com
+    EnableNodeOUs: true
+    Specs:
+      - Hostname: orderer
+
+PeerOrgs:
+  - Name: FarmerOrg
+    Domain: farmerorg.tracesafe.com
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+    Users:
+      Count: 1
+
+  - Name: DriverOrg
+    Domain: driverorg.tracesafe.com
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+    Users:
+      Count: 1
+
+  - Name: RetailerOrg
+    Domain: retailerorg.tracesafe.com
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+    Users:
+      Count: 1
+
+  - Name: RegulatorOrg
+    Domain: regulatororg.tracesafe.com
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+    Users:
+      Count: 1

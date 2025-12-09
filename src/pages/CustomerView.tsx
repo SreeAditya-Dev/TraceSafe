@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Leaf, Truck, Store, ShoppingCart, MapPin,
-    Thermometer, Droplets, CheckCircle, Clock, Share2, ArrowLeft
+    Thermometer, Droplets, CheckCircle, Clock, Share2, ArrowLeft, Box, ExternalLink
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -56,6 +56,7 @@ interface BatchJourney {
         };
         qr_code_url: string;
         created_at: string;
+        blockchain_tx_id?: string;
     };
     farmer: {
         name: string;
@@ -64,6 +65,12 @@ interface BatchJourney {
         agristack_status: string;
     };
     journey: JourneyEvent[];
+    blockchain?: {
+        network: string;
+        channel: string;
+        chaincode: string;
+        txId: string;
+    };
 }
 
 const eventIcons: Record<string, typeof Leaf> = {
@@ -254,6 +261,36 @@ const CustomerView: React.FC = () => {
                             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
                                 <CheckCircle className="h-5 w-5 text-green-600" />
                                 <span className="text-green-800 font-medium">Verified via AgriStack Registry</span>
+                            </div>
+                        )}
+
+                        {/* Blockchain Verification */}
+                        {(data.batch.blockchain_tx_id || data.blockchain) && (
+                            <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Box className="h-5 w-5 text-purple-600" />
+                                    <span className="text-purple-800 font-semibold">Blockchain Verified</span>
+                                    <Badge className="bg-purple-600 text-white text-xs">Hyperledger Fabric</Badge>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                        <p className="text-purple-600">Network</p>
+                                        <p className="font-mono text-xs">TraceSafe Consortium</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-purple-600">Channel</p>
+                                        <p className="font-mono text-xs">tracesafe-channel</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <p className="text-purple-600">Transaction ID</p>
+                                        <p className="font-mono text-xs break-all">
+                                            {data.batch.blockchain_tx_id || data.blockchain?.txId}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-purple-500 mt-2">
+                                    This batch is immutably recorded on a permissioned enterprise blockchain.
+                                </p>
                             </div>
                         )}
                     </CardContent>
