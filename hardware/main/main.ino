@@ -329,9 +329,10 @@ void readGPS(){
 bool sendToBackend(){
   if (storedBACKEND.length() < 5) return false;
   if (WiFi.status() != WL_CONNECTED) return false;
+  WiFiClient client;
   HTTPClient http;
   String url = storedBACKEND; // expect http://host/api/iot/data
-  http.begin(url);
+  http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   // build JSON
   unsigned long ts = (unsigned long)(millis()/1000);
