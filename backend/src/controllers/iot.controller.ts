@@ -34,10 +34,17 @@ export async function ingestReading(req: Request, res: Response) {
       ts
     } = body;
 
-    if (!batch_id || !device_role || !ts) {
-      return res.status(400).json({ error: "batch_id, device_role, ts required" });
+    if (!batch_id || !device_role) {
+      return res.status(400).json({ error: "batch_id, device_role required" });
     }
-    const timest = epochToTimestamptz(Number(ts));
+
+    // If ts is missing or looks like uptime (small integer), use server time
+    let timest: Date;
+    if (!ts || Number(ts) < 1000000000) {
+      timest = new Date();
+    } else {
+      timest = epochToTimestamptz(Number(ts));
+    }
 
     const client = await pool.connect();
     try {
