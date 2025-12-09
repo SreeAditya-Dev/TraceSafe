@@ -104,8 +104,8 @@ export async function getLatestForRole(req: Request, res: Response) {
 export async function getAvgCrate(req: Request, res: Response) {
   const { start, end } = req.query;
   if (!start || !end) return res.status(400).json({ error: "start & end epoch seconds required" });
-  const s = new Date(Number(start)*1000);
-  const e = new Date(Number(end)*1000);
+  const s = new Date(Number(start) * 1000);
+  const e = new Date(Number(end) * 1000);
   const client = await pool.connect();
   try {
     const q = `SELECT AVG(crate_temp) as avg_crate_temp FROM iot_readings WHERE ts >= $1 AND ts <= $2`;
@@ -119,8 +119,8 @@ export async function getAvgCrate(req: Request, res: Response) {
 export async function getAvgReefer(req: Request, res: Response) {
   const { start, end } = req.query;
   if (!start || !end) return res.status(400).json({ error: "start & end epoch seconds required" });
-  const s = new Date(Number(start)*1000);
-  const e = new Date(Number(end)*1000);
+  const s = new Date(Number(start) * 1000);
+  const e = new Date(Number(end) * 1000);
   const client = await pool.connect();
   try {
     const q = `SELECT AVG(reefer_temp) as avg_reefer_temp FROM iot_readings WHERE ts >= $1 AND ts <= $2`;
@@ -134,8 +134,8 @@ export async function getAvgReefer(req: Request, res: Response) {
 export async function getAvgHumidity(req: Request, res: Response) {
   const { start, end } = req.query;
   if (!start || !end) return res.status(400).json({ error: "start & end epoch seconds required" });
-  const s = new Date(Number(start)*1000);
-  const e = new Date(Number(end)*1000);
+  const s = new Date(Number(start) * 1000);
+  const e = new Date(Number(end) * 1000);
   const client = await pool.connect();
   try {
     const q = `SELECT AVG(humidity) as avg_humidity FROM iot_readings WHERE ts >= $1 AND ts <= $2`;
@@ -154,6 +154,28 @@ export async function getLatestLocation(req: Request, res: Response) {
     const q = `SELECT lat, lon, ts FROM iot_readings WHERE batch_id=$1 AND lat IS NOT NULL AND lon IS NOT NULL ORDER BY ts DESC LIMIT 1`;
     const r = await client.query(q, [batch_id]);
     res.json(r.rows[0] ?? null);
+  } finally {
+    client.release();
+  }
+}
+
+export async function getAllAverages(req: Request, res: Response) {
+  const { start, end } = req.query;
+  if (!start || !end) return res.status(400).json({ error: "start & end epoch seconds required" });
+  const s = new Date(Number(start) * 1000);
+  const e = new Date(Number(end) * 1000);
+  const client = await pool.connect();
+  try {
+    const q = `
+      SELECT 
+        AVG(crate_temp) as avg_crate_temp,
+        AVG(reefer_temp) as avg_reefer_temp, 
+        AVG(humidity) as avg_humidity
+      FROM iot_readings 
+      WHERE ts >= $1 AND ts <= $2
+    `;
+    const r = await client.query(q, [s, e]);
+    res.json(r.rows[0]);
   } finally {
     client.release();
   }
