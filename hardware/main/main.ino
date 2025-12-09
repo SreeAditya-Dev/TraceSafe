@@ -73,7 +73,7 @@ const unsigned long SEND_INTERVAL_MS = 60UL * 1000UL;
 #define DHTTYPE DHT22
 
 // fan control thresholds
-const float CRATE_SETPOINT_C = 8.0;
+const float CRATE_SETPOINT_C = 26.0;
 const float HYSTERESIS_C = 1.0;
 
 // Set to true if Relay turns ON with HIGH signal (Common for small modules)
@@ -340,13 +340,13 @@ void setFan(bool on){
   else digitalWrite(RELAY_PIN, on ? LOW : HIGH);
 }
 
-// fan logic
+// fan logic - turn fan ON when temperature is below 26°C
 void fanLogic(){
   if (isnan(crateTemp)) return;
-  float high = CRATE_SETPOINT_C + HYSTERESIS_C;
-  float low = CRATE_SETPOINT_C - HYSTERESIS_C;
-  if (crateTemp >= high && !fanState) setFan(true);
-  else if (crateTemp <= low && fanState) setFan(false);
+  float high = CRATE_SETPOINT_C + HYSTERESIS_C;  // 27°C - turn fan OFF above this
+  float low = CRATE_SETPOINT_C - HYSTERESIS_C;   // 25°C - turn fan ON below this
+  if (crateTemp <= low && !fanState) setFan(true);
+  else if (crateTemp >= high && fanState) setFan(false);
 }
 
 // read sensors
