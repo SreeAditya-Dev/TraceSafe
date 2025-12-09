@@ -167,19 +167,40 @@ void eraseCreds(){
 const char* FORM_HTML = R"rawliteral(
 <!DOCTYPE html>
 <html>
-  <head><meta name="viewport" content="width=device-width, initial-scale=1"/></head>
-  <body>
-    <h3>TraceSafe - WiFi Provisioning</h3>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TraceSafe Setup</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+    .card { background: white; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+    h3 { margin-top: 0; margin-bottom: 1.5rem; color: #1a1a1a; text-align: center; font-weight: 600; }
+    label { display: block; margin-bottom: 0.5rem; color: #4a5568; font-size: 0.9rem; font-weight: 500; }
+    input[type=text], input[type=password] { width: 100%; padding: 12px; margin-bottom: 1.2rem; border: 1px solid #e2e8f0; border-radius: 6px; box-sizing: border-box; font-size: 1rem; transition: border-color 0.2s; }
+    input[type=text]:focus, input[type=password]:focus { border-color: #3182ce; outline: none; }
+    input[type=submit] { width: 100%; background-color: #3182ce; color: white; padding: 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: 600; transition: background-color 0.2s; }
+    input[type=submit]:hover { background-color: #2b6cb0; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #718096; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h3>TraceSafe Setup</h3>
     <form action="/save" method="post">
-      WiFi SSID:<br><input type="text" name="ssid"><br>
-      WiFi Password:<br><input type="password" name="pass"><br>
-      Backend URL (http://...):<br><input type="text" name="backend"><br>
-      Batch ID:<br><input type="text" name="batch"><br><br>
+      <label>WiFi SSID</label>
+      <input type="text" name="ssid" placeholder="Network Name" required>
+      
+      <label>WiFi Password</label>
+      <input type="password" name="pass" placeholder="Password">
+      
+      <label>Batch ID</label>
+      <input type="text" name="batch" placeholder="e.g. TSF-23001">
+      
       <input type="submit" value="Save & Connect">
     </form>
-    <p>AP IP: <span id="ip"></span></p>
-    <script>document.getElementById('ip').innerText = location.hostname;</script>
-  </body>
+    <div class="footer">AP IP: <span id="ip"></span></div>
+  </div>
+  <script>document.getElementById('ip').innerText = location.hostname;</script>
+</body>
 </html>
 )rawliteral";
 
@@ -195,16 +216,17 @@ void handleSave(){
   }
   String ssid = server.arg("ssid");
   String pass = server.arg("pass");
-  String backend = server.arg("backend");
+  // Backend URL is handled by default in code, not user input
   String batch = server.arg("batch");
-  if (ssid.length() < 1 || backend.length() < 5) {
-    server.send(400, "text/plain", "SSID and Backend required");
+  
+  if (ssid.length() < 1) {
+    server.send(400, "text/plain", "SSID required");
     return;
   }
   // save to EEPROM
   saveStringToEEPROM(EEPROM_SSID_ADDR, ssid);
   saveStringToEEPROM(EEPROM_PASS_ADDR, pass);
-  saveStringToEEPROM(EEPROM_BACKEND_ADDR, backend);
+  // Do not overwrite backend addr
   saveStringToEEPROM(EEPROM_BATCH_ADDR, batch);
   server.send(200, "text/plain", "Saved. Restarting...");
   delay(1000);
