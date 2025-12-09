@@ -5,13 +5,18 @@
  * for immutable supply chain traceability.
  */
 
-const { Gateway, Wallets } = require('fabric-network');
-const path = require('path');
-const fs = require('fs');
-const yaml = require('yaml');
+import { Gateway, Wallets } from 'fabric-network';
+import path from 'path';
+import fs from 'fs';
+import yaml from 'yaml';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Organization to MSP mapping
-const ORG_MSP_MAP = {
+export const ORG_MSP_MAP = {
     farmer: 'FarmerOrgMSP',
     driver: 'DriverOrgMSP',
     retailer: 'RetailerOrgMSP',
@@ -20,9 +25,9 @@ const ORG_MSP_MAP = {
 };
 
 // Organization connection profile paths
-const CONNECTION_PROFILE_DIR = path.resolve(__dirname, '../../fabric/connection-profiles');
+const CONNECTION_PROFILE_DIR = path.resolve(__dirname, '../../../fabric/connection-profiles');
 
-class FabricService {
+export class FabricService {
     constructor() {
         this.gateway = null;
         this.network = null;
@@ -53,7 +58,7 @@ class FabricService {
             const ccp = yaml.parse(ccpFile);
 
             // Create wallet
-            const walletPath = path.resolve(__dirname, '../../fabric/wallets', orgName.toLowerCase());
+            const walletPath = path.resolve(__dirname, '../../../fabric/wallets', orgName.toLowerCase());
             const wallet = await Wallets.newFileSystemWallet(walletPath);
 
             // Check if identity exists
@@ -130,8 +135,8 @@ class FabricService {
         }
 
         try {
-            const result = await this.contract.submitTransaction(
-                'CreateBatch',
+            const transaction = this.contract.createTransaction('CreateBatch');
+            const result = await transaction.submit(
                 batchData.batchId,
                 batchData.farmerId || '',
                 batchData.farmerName || '',
@@ -148,7 +153,7 @@ class FabricService {
 
             return {
                 success: true,
-                txId: this.getTransactionId(),
+                txId: transaction.getTransactionId(),
                 result: result.toString()
             };
         } catch (error) {
@@ -404,15 +409,9 @@ let fabricServiceInstance = null;
 /**
  * Get or create FabricService instance
  */
-function getFabricService() {
+export function getFabricService() {
     if (!fabricServiceInstance) {
         fabricServiceInstance = new FabricService();
     }
     return fabricServiceInstance;
 }
-
-module.exports = {
-    FabricService,
-    getFabricService,
-    ORG_MSP_MAP,
-};

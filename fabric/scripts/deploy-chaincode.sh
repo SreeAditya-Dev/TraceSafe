@@ -24,35 +24,35 @@ docker exec -e CORE_PEER_LOCALMSPID=FarmerOrgMSP \
   -e CORE_PEER_ADDRESS=peer0.farmerorg.tracesafe.com:7051 \
   -e CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmerorg.tracesafe.com/peers/peer0.farmerorg.tracesafe.com/tls/ca.crt \
   -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmerorg.tracesafe.com/users/Admin@farmerorg.tracesafe.com/msp \
-  cli peer lifecycle chaincode install ${CHAINCODE_NAME}.tar.gz
+  cli peer lifecycle chaincode install ${CHAINCODE_NAME}.tar.gz || true
 
 echo "========== Installing on DriverOrg =========="
 docker exec -e CORE_PEER_LOCALMSPID=DriverOrgMSP \
   -e CORE_PEER_ADDRESS=peer0.driverorg.tracesafe.com:8051 \
   -e CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/driverorg.tracesafe.com/peers/peer0.driverorg.tracesafe.com/tls/ca.crt \
   -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/driverorg.tracesafe.com/users/Admin@driverorg.tracesafe.com/msp \
-  cli peer lifecycle chaincode install ${CHAINCODE_NAME}.tar.gz
+  cli peer lifecycle chaincode install ${CHAINCODE_NAME}.tar.gz || true
 
 echo "========== Installing on RetailerOrg =========="
 docker exec -e CORE_PEER_LOCALMSPID=RetailerOrgMSP \
   -e CORE_PEER_ADDRESS=peer0.retailerorg.tracesafe.com:9051 \
   -e CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/retailerorg.tracesafe.com/peers/peer0.retailerorg.tracesafe.com/tls/ca.crt \
   -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/retailerorg.tracesafe.com/users/Admin@retailerorg.tracesafe.com/msp \
-  cli peer lifecycle chaincode install ${CHAINCODE_NAME}.tar.gz
+  cli peer lifecycle chaincode install ${CHAINCODE_NAME}.tar.gz || true
 
 echo "========== Installing on RegulatorOrg =========="
 docker exec -e CORE_PEER_LOCALMSPID=RegulatorOrgMSP \
   -e CORE_PEER_ADDRESS=peer0.regulatororg.tracesafe.com:10051 \
   -e CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/regulatororg.tracesafe.com/peers/peer0.regulatororg.tracesafe.com/tls/ca.crt \
   -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/regulatororg.tracesafe.com/users/Admin@regulatororg.tracesafe.com/msp \
-  cli peer lifecycle chaincode install ${CHAINCODE_NAME}.tar.gz
+  cli peer lifecycle chaincode install ${CHAINCODE_NAME}.tar.gz || true
 
 echo "========== Getting Package ID =========="
 PACKAGE_ID=$(docker exec -e CORE_PEER_LOCALMSPID=FarmerOrgMSP \
   -e CORE_PEER_ADDRESS=peer0.farmerorg.tracesafe.com:7051 \
   -e CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmerorg.tracesafe.com/peers/peer0.farmerorg.tracesafe.com/tls/ca.crt \
   -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmerorg.tracesafe.com/users/Admin@farmerorg.tracesafe.com/msp \
-  cli peer lifecycle chaincode queryinstalled --output json | jq -r '.installed_chaincodes[0].package_id')
+  cli peer lifecycle chaincode queryinstalled | grep "Label: ${CHAINCODE_NAME}_${CHAINCODE_VERSION}" | sed -n 's/^Package ID: //; s/, Label:.*$//p')
 
 echo "Package ID: $PACKAGE_ID"
 

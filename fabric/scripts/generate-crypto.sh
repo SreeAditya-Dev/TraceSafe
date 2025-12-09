@@ -4,7 +4,7 @@
 set -e
 
 FABRIC_BIN=${FABRIC_BIN:-/usr/local/bin}
-export PATH=$FABRIC_BIN:$PATH
+export PATH=$PWD/bin:$FABRIC_BIN:$PATH
 
 cd "$(dirname "$0")/.."
 
@@ -26,8 +26,8 @@ mkdir -p channel-artifacts
 # Generate genesis block
 configtxgen -profile TraceSafeOrdererGenesis -channelID system-channel -outputBlock ./channel-artifacts/genesis.block
 
-# Generate channel transaction
-configtxgen -profile TraceSafeChannel -outputCreateChannelTx ./channel-artifacts/tracesafe-channel.tx -channelID tracesafe-channel
+# Generate channel genesis block (for osnadmin)
+configtxgen -profile TraceSafeChannel -outputBlock ./channel-artifacts/tracesafe-channel.block -channelID tracesafe-channel
 
 # Generate anchor peer transactions
 configtxgen -profile TraceSafeChannel -outputAnchorPeersUpdate ./channel-artifacts/FarmerOrgMSPanchors.tx -channelID tracesafe-channel -asOrg FarmerOrgMSP
@@ -37,4 +37,4 @@ configtxgen -profile TraceSafeChannel -outputAnchorPeersUpdate ./channel-artifac
 
 echo "========== Channel artifacts generated =========="
 echo "Genesis block: channel-artifacts/genesis.block"
-echo "Channel tx: channel-artifacts/tracesafe-channel.tx"
+echo "Channel block: channel-artifacts/tracesafe-channel.block"

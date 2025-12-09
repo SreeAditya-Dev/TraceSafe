@@ -20,6 +20,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { LocationInput } from '@/components/LocationInput';
 
 interface Batch {
     id: string;
@@ -42,12 +43,11 @@ const RetailerDashboard: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [manualBatchId, setManualBatchId] = useState('');
     const [loadedBatch, setLoadedBatch] = useState<Batch | null>(null);
-    const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [location, setLocation] = useState<{ lat: string; lng: string }>({ lat: '', lng: '' });
     const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
         loadData();
-        getLocation();
     }, []);
 
     const loadData = async () => {
@@ -62,19 +62,7 @@ const RetailerDashboard: React.FC = () => {
         }
     };
 
-    const getLocation = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    setLocation({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                    });
-                },
-                (error) => console.error('Geolocation error:', error)
-            );
-        }
-    };
+
 
     const handleLoadBatch = async (batchId: string) => {
         try {
@@ -99,8 +87,8 @@ const RetailerDashboard: React.FC = () => {
         setIsProcessing(true);
         try {
             await batchAPI.receive(loadedBatch.batch_id, {
-                latitude: location?.lat,
-                longitude: location?.lng,
+                latitude: parseFloat(location.lat) || 0,
+                longitude: parseFloat(location.lng) || 0,
                 notes: 'Received at retail location',
             });
 
@@ -248,6 +236,14 @@ const RetailerDashboard: React.FC = () => {
                                         <p className="font-medium">{new Date(loadedBatch.created_at).toLocaleDateString()}</p>
                                     </div>
                                 </div>
+                                <div className="mb-4">
+                                    <LocationInput
+                                        latitude={location.lat}
+                                        longitude={location.lng}
+                                        onChange={(lat, lng) => setLocation({ lat, lng })}
+                                        label="Retail Location"
+                                    />
+                                </div>
 
                                 {(loadedBatch.status === 'delivered' || loadedBatch.status === 'in_transit') && (
                                     <Button
@@ -392,7 +388,7 @@ const RetailerDashboard: React.FC = () => {
                     </div>
                 )}
             </main>
-        </div>
+        </div >
     );
 };
 

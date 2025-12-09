@@ -20,6 +20,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { LocationInput } from '@/components/LocationInput';
 
 interface Batch {
     id: string;
@@ -43,7 +44,7 @@ const TruckDashboard: React.FC = () => {
     const [showScanner, setShowScanner] = useState(false);
     const [scannedBatch, setScannedBatch] = useState<Batch | null>(null);
     const [manualBatchId, setManualBatchId] = useState('');
-    const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [location, setLocation] = useState<{ lat: string; lng: string }>({ lat: '', lng: '' });
 
     // Transit update form
     const [transitForm, setTransitForm] = useState({
@@ -55,7 +56,6 @@ const TruckDashboard: React.FC = () => {
 
     useEffect(() => {
         loadData();
-        getLocation();
     }, []);
 
     const loadData = async () => {
@@ -70,22 +70,7 @@ const TruckDashboard: React.FC = () => {
         }
     };
 
-    const getLocation = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.watchPosition(
-                (position) => {
-                    setLocation({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                    });
-                },
-                (error) => {
-                    console.error('Geolocation error:', error);
-                },
-                { enableHighAccuracy: true }
-            );
-        }
-    };
+
 
     const handleLoadBatch = async (batchId: string) => {
         try {
@@ -111,8 +96,8 @@ const TruckDashboard: React.FC = () => {
         setIsUpdating(true);
         try {
             await batchAPI.pickup(scannedBatch.batch_id, {
-                latitude: location?.lat,
-                longitude: location?.lng,
+                latitude: parseFloat(location.lat) || 0,
+                longitude: parseFloat(location.lng) || 0,
                 notes: 'Picked up by driver',
             });
 
@@ -141,8 +126,8 @@ const TruckDashboard: React.FC = () => {
         setIsUpdating(true);
         try {
             await batchAPI.updateTransit(scannedBatch.batch_id, {
-                latitude: location?.lat,
-                longitude: location?.lng,
+                latitude: parseFloat(location.lat) || 0,
+                longitude: parseFloat(location.lng) || 0,
                 temperature: transitForm.temperature ? parseFloat(transitForm.temperature) : undefined,
                 humidity: transitForm.humidity ? parseFloat(transitForm.humidity) : undefined,
                 notes: transitForm.notes,
@@ -172,8 +157,8 @@ const TruckDashboard: React.FC = () => {
         setIsUpdating(true);
         try {
             await batchAPI.deliver(scannedBatch.batch_id, {
-                latitude: location?.lat,
-                longitude: location?.lng,
+                latitude: parseFloat(location.lat) || 0,
+                longitude: parseFloat(location.lng) || 0,
                 notes: 'Delivered to destination',
             });
 
@@ -275,12 +260,14 @@ const TruckDashboard: React.FC = () => {
                             </Button>
                         </div>
 
-                        {location && (
-                            <p className="text-xs text-gray-500 flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                Current Location: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-                            </p>
-                        )}
+                        <div className="mt-4">
+                            <LocationInput
+                                latitude={location.lat}
+                                longitude={location.lng}
+                                onChange={(lat, lng) => setLocation({ lat, lng })}
+                                label="Current Location"
+                            />
+                        </div>
                     </CardContent>
                 </Card>
 

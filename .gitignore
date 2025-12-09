@@ -128,3 +128,15 @@ dist
 
 # macOS
 .DS_Store
+
+# Hyperledger Fabric
+fabric/bin/
+fabric/config/
+fabric/builders/
+fabric/crypto-config/
+fabric/channel-artifacts/
+fabric/chaincode/**/vendor/
+fabric/chaincode/**/tracesafe
+*.block
+*.tx
+*.tar.gz

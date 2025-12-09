@@ -29,6 +29,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { LocationInput } from '@/components/LocationInput';
 
 interface Batch {
     id: string;
@@ -78,11 +79,10 @@ const FarmerDashboard: React.FC = () => {
     });
     const [isCreating, setIsCreating] = useState(false);
     const [createdQR, setCreatedQR] = useState<string | null>(null);
-    const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [location, setLocation] = useState<{ lat: string; lng: string }>({ lat: '', lng: '' });
 
     useEffect(() => {
         loadData();
-        getLocation();
     }, []);
 
     const loadData = async () => {
@@ -103,21 +103,7 @@ const FarmerDashboard: React.FC = () => {
         }
     };
 
-    const getLocation = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    setLocation({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                    });
-                },
-                (error) => {
-                    console.error('Geolocation error:', error);
-                }
-            );
-        }
-    };
+
 
     const handleVerifyAgristack = async () => {
         if (!agristackId.trim()) return;
@@ -184,9 +170,9 @@ const FarmerDashboard: React.FC = () => {
             formData.append('harvestDate', batchForm.harvestDate);
             formData.append('address', batchForm.address);
 
-            if (location) {
-                formData.append('latitude', location.lat.toString());
-                formData.append('longitude', location.lng.toString());
+            if (location.lat && location.lng) {
+                formData.append('latitude', location.lat);
+                formData.append('longitude', location.lng);
             }
 
             const response = await batchAPI.create(formData);
@@ -443,12 +429,14 @@ const FarmerDashboard: React.FC = () => {
                                         />
                                     </div>
 
-                                    {location && (
-                                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                                            <MapPin className="h-3 w-3" />
-                                            GPS: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
-                                        </p>
-                                    )}
+                                    <div className="space-y-2">
+                                        <LocationInput
+                                            latitude={location.lat}
+                                            longitude={location.lng}
+                                            onChange={(lat, lng) => setLocation({ lat, lng })}
+                                            label="Farm Location"
+                                        />
+                                    </div>
 
                                     <Button type="submit" className="w-full" disabled={isCreating}>
                                         {isCreating ? 'Creating...' : 'Create Batch & Generate QR'}

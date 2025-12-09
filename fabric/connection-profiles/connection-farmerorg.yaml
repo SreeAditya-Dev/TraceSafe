@@ -13,12 +13,6 @@ organizations:
       - peer0.farmerorg.tracesafe.com
     certificateAuthorities:
       - ca.farmerorg.tracesafe.com
-    users:
-      Admin:
-        cert:
-          path: ../crypto-config/peerOrganizations/farmerorg.tracesafe.com/users/Admin@farmerorg.tracesafe.com/msp/signcerts/Admin@farmerorg.tracesafe.com-cert.pem
-        key:
-          path: ../crypto-config/peerOrganizations/farmerorg.tracesafe.com/users/Admin@farmerorg.tracesafe.com/msp/keystore/priv_sk
   DriverOrg:
     mspid: DriverOrgMSP
     peers:
@@ -35,28 +29,28 @@ peers:
   peer0.farmerorg.tracesafe.com:
     url: grpcs://localhost:7051
     tlsCACerts:
-      path: ../crypto-config/peerOrganizations/farmerorg.tracesafe.com/tlsca/tlsca.farmerorg.tracesafe.com-cert.pem
+      path: /home/mohana/projects/TraceSafe/fabric/crypto-config/peerOrganizations/farmerorg.tracesafe.com/tlsca/tlsca.farmerorg.tracesafe.com-cert.pem
     grpcOptions:
       ssl-target-name-override: peer0.farmerorg.tracesafe.com
       hostnameOverride: peer0.farmerorg.tracesafe.com
   peer0.driverorg.tracesafe.com:
     url: grpcs://localhost:8051
     tlsCACerts:
-      path: ../crypto-config/peerOrganizations/driverorg.tracesafe.com/tlsca/tlsca.driverorg.tracesafe.com-cert.pem
+      path: /home/mohana/projects/TraceSafe/fabric/crypto-config/peerOrganizations/driverorg.tracesafe.com/tlsca/tlsca.driverorg.tracesafe.com-cert.pem
     grpcOptions:
       ssl-target-name-override: peer0.driverorg.tracesafe.com
       hostnameOverride: peer0.driverorg.tracesafe.com
   peer0.retailerorg.tracesafe.com:
     url: grpcs://localhost:9051
     tlsCACerts:
-      path: ../crypto-config/peerOrganizations/retailerorg.tracesafe.com/tlsca/tlsca.retailerorg.tracesafe.com-cert.pem
+      path: /home/mohana/projects/TraceSafe/fabric/crypto-config/peerOrganizations/retailerorg.tracesafe.com/tlsca/tlsca.retailerorg.tracesafe.com-cert.pem
     grpcOptions:
       ssl-target-name-override: peer0.retailerorg.tracesafe.com
       hostnameOverride: peer0.retailerorg.tracesafe.com
   peer0.regulatororg.tracesafe.com:
     url: grpcs://localhost:10051
     tlsCACerts:
-      path: ../crypto-config/peerOrganizations/regulatororg.tracesafe.com/tlsca/tlsca.regulatororg.tracesafe.com-cert.pem
+      path: /home/mohana/projects/TraceSafe/fabric/crypto-config/peerOrganizations/regulatororg.tracesafe.com/tlsca/tlsca.regulatororg.tracesafe.com-cert.pem
     grpcOptions:
       ssl-target-name-override: peer0.regulatororg.tracesafe.com
       hostnameOverride: peer0.regulatororg.tracesafe.com
@@ -64,7 +58,7 @@ orderers:
   orderer.tracesafe.com:
     url: grpcs://localhost:7050
     tlsCACerts:
-      path: ../crypto-config/ordererOrganizations/tracesafe.com/tlsca/tlsca.tracesafe.com-cert.pem
+      path: /home/mohana/projects/TraceSafe/fabric/crypto-config/ordererOrganizations/tracesafe.com/tlsca/tlsca.tracesafe.com-cert.pem
     grpcOptions:
       ssl-target-name-override: orderer.tracesafe.com
       hostnameOverride: orderer.tracesafe.com

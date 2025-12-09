@@ -12,7 +12,7 @@ echo "=========================================="
 # Check for Fabric binaries
 if ! command -v cryptogen &> /dev/null; then
     echo "Fabric binaries not found. Installing..."
-    curl -sSL https://bit.ly/2ysbOFE | bash -s -- 2.5.0 1.5.7 -d -s
+    curl -sSL https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/bootstrap.sh | bash -s -- 2.5.0 1.5.7 -d -s
     export PATH=$PWD/bin:$PATH
 fi
 
