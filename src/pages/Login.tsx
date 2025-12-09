@@ -16,6 +16,12 @@ const roleIcons = {
     admin: Shield,
 };
 
+// Roles allowed for registration (farmer verifies via AgriStack, admin is pre-set)
+const registerableRoles = {
+    driver: Truck,
+    retailer: Store,
+};
+
 const roleColors = {
     farmer: 'bg-green-500 hover:bg-green-600',
     driver: 'bg-blue-500 hover:bg-blue-600',
@@ -42,7 +48,7 @@ const Login: React.FC = () => {
         name: '',
         email: '',
         password: '',
-        role: 'farmer',
+        role: 'driver', // Default to driver (farmer/admin not registrable)
         phone: '',
     });
 
@@ -269,8 +275,8 @@ const Login: React.FC = () => {
                                     <div className="space-y-2">
                                         <Label>Role</Label>
                                         <div className="grid grid-cols-2 gap-2">
-                                            {(Object.keys(roleIcons) as Array<keyof typeof roleIcons>).map((role) => {
-                                                const Icon = roleIcons[role];
+                                            {(Object.keys(registerableRoles) as Array<keyof typeof registerableRoles>).map((role) => {
+                                                const Icon = registerableRoles[role];
                                                 return (
                                                     <Button
                                                         key={role}
@@ -285,6 +291,9 @@ const Login: React.FC = () => {
                                                 );
                                             })}
                                         </div>
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                            Farmers access the platform through AgriStack verification.
+                                        </p>
                                     </div>
                                     <Button type="submit" className="w-full" disabled={isLoading}>
                                         {isLoading ? 'Creating Account...' : 'Create Account'}
