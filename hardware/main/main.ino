@@ -349,14 +349,11 @@ void readGPS(){
 
 // send JSON to backend (no auth headers)
 bool sendToBackend(){
+  // Check backend string
   if (storedBACKEND.length() < 5) return false;
   if (WiFi.status() != WL_CONNECTED) return false;
-  WiFiClient client;
-  HTTPClient http;
-  String url = storedBACKEND; // expect http://host/api/iot/data
-  http.begin(client, url);
-  http.addHeader("Content-Type", "application/json");
-  // build JSON
+  
+  String url = storedBACKEND; 
   unsigned long ts = (unsigned long)(millis()/1000);
   String payload = "{";
   payload += "\"batch_id\":\"" + storedBATCH + "\",";
@@ -369,12 +366,30 @@ bool sendToBackend(){
   payload += "\"fan_on\":" + String(fanState ? "true" : "false") + ",";
   payload += "\"ts\":" + String(ts);
   payload += "}";
-  int code = http.POST(payload);
-  Serial.printf("POST %s -> %d\n", url.c_str(), code);
-  String resp = http.getString();
-  Serial.println("Resp: " + resp);
-  http.end();
-  return (code >=200 && code <300);
+
+  int code = -1;
+  // Try up to 3 times
+  for (int i=0; i<3; i++) {
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, url);
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(3000); // 3s timeout
+    
+    code = http.POST(payload);
+    if (code >= 200 && code < 300) {
+      Serial.printf("POST %s -> %d\n", url.c_str(), code);
+      String resp = http.getString();
+      Serial.println("Resp: " + resp);
+      http.end();
+      return true; // Success
+    } else {
+      Serial.printf("POST Attempt %d failed: code %d (%s)\n", i+1, code, http.errorToString(code).c_str());
+      http.end();
+      delay(1000); // wait 1s before retry
+    }
+  }
+  return false;
 }
 
 // check if long pressed
