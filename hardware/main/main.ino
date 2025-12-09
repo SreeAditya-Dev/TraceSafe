@@ -13,8 +13,10 @@
   DHT22 data    -> D2 (GPIO4)
   GPS TX        -> D7 (GPIO13)  [GPS TX -> ESP RX of software serial]
   GPS RX        -> D8 (GPIO15)  [optional]
-  FAN control   -> D6 (GPIO12)
+
+  RELAY/FAN     -> D6 (GPIO12)  [Connect to Relay IN]
   BUTTON        -> D3 (GPIO0)   (use internal pullup)
+
   BUZZER        -> D4 (GPIO2)
   4.7kΩ between DS18B20 data and 3.3V
 
@@ -57,8 +59,10 @@ const unsigned long SEND_INTERVAL_MS = 60UL * 1000UL;
 #define DHT_PIN     D2   // GPIO4
 #define GPS_RX_PIN  D7   // GPIO13 (GPS TX -> ESP software RX)
 #define GPS_TX_PIN  D8   // GPIO15 (optional)
-#define FAN_PIN     D6   // GPIO12
+
+#define RELAY_PIN   D6   // GPIO12 (Connect to Relay Module IN pin)
 #define BUTTON_PIN  D3   // GPIO0 (with internal pullup)
+
 #define BUZZER_PIN  D4   // GPIO2
 
 #define DHTTYPE DHT22
@@ -66,7 +70,10 @@ const unsigned long SEND_INTERVAL_MS = 60UL * 1000UL;
 // fan control thresholds
 const float CRATE_SETPOINT_C = 8.0;
 const float HYSTERESIS_C = 1.0;
-const bool FAN_ACTIVE_HIGH = true;
+
+// Set to true if Relay turns ON with HIGH signal (Common for small modules)
+// Set to false if Relay turns ON with LOW signal (Common for optocoupler modules)
+const bool RELAY_ACTIVE_HIGH = true;
 
 // ---------------------------------------------------
 ESP8266WebServer server(80);
@@ -137,6 +144,7 @@ void loadFromEEPROM(){
   storedSSID = readStringFromEEPROM(EEPROM_SSID_ADDR, 180);
   storedPASS = readStringFromEEPROM(EEPROM_PASS_ADDR, 180);
   storedBACKEND = readStringFromEEPROM(EEPROM_BACKEND_ADDR, 260);
+  if (storedBACKEND.length() < 5) storedBACKEND = "http://172.16.45.33:3000/api/iot/data";
   storedBATCH = readStringFromEEPROM(EEPROM_BATCH_ADDR, 120);
 }
 
@@ -208,9 +216,11 @@ void setup() {
   Serial.begin(115200);
   delay(100);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(FAN_PIN, OUTPUT);
+
+  pinMode(RELAY_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
-  if (FAN_ACTIVE_HIGH) digitalWrite(FAN_PIN, LOW); else digitalWrite(FAN_PIN, HIGH);
+  // Ensure relay is off at boot
+  if (RELAY_ACTIVE_HIGH) digitalWrite(RELAY_PIN, LOW); else digitalWrite(RELAY_PIN, HIGH);
   setFan(false);
 
   EEPROM.begin(EEPROM_SIZE);
@@ -275,11 +285,11 @@ void beep(int times, int toneMs){
   }
 }
 
-// toggle fan
+// toggle fan/relay
 void setFan(bool on){
   fanState = on;
-  if (FAN_ACTIVE_HIGH) digitalWrite(FAN_PIN, on ? HIGH : LOW);
-  else digitalWrite(FAN_PIN, on ? LOW : HIGH);
+  if (RELAY_ACTIVE_HIGH) digitalWrite(RELAY_PIN, on ? HIGH : LOW);
+  else digitalWrite(RELAY_PIN, on ? LOW : HIGH);
 }
 
 // fan logic
