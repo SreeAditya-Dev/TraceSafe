@@ -1,0 +1,53 @@
+# ---------------------
+# Ignore Python virtual environment
+# ---------------------
+venv/
+env/
+myenv/
+Include/
+Lib/
+Scripts/
+pyvenv.cfg
+
+# ---------------------
+# Ignore model files (very large)
+# ---------------------
+*.pkl
+*.joblib
+
+# ---------------------
+# Ignore CSV datasets
+# ---------------------
+*.csv
+
+# If you want to keep only SMALL sample CSVs, uncomment below:
+# !sample.csv
+
+# ---------------------
+# Python Cache
+# ---------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ---------------------
+# Jupyter Notebook checkpoints
+# ---------------------
+.ipynb_checkpoints/
+
+# ---------------------
+# VSCode settings
+# ---------------------
+.vscode/
+
+# ---------------------
+# Logs
+# ---------------------
+*.log
+
+# ---------------------
+# Other temporary / generated files
+# ---------------------
+.DS_Store
+Thumbs.db
