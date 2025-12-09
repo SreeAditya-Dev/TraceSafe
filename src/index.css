@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
+
+/* Government Portal Design System - TraceSafe Platform
+   Colors are HSL based, flat UI, official government styling */
+
+@layer base {
+  :root {
+    /* Government Blue Theme */
+    --background: 0 0% 100%;
+    --foreground: 210 11% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 11% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 11% 15%;
+
+    /* Primary Government Blue */
+    --primary: 210 100% 25%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Light Blue for info boxes */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 210 100% 25%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 210 11% 40%;
+
+    /* Green for AgriStack */
+    --accent: 145 63% 32%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Orange for FSSAI */
+    --warning: 25 95% 53%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Government Grey Borders */
+    --border: 210 20% 80%;
+    --input: 210 20% 80%;
+    --ring: 210 100% 25%;
+
+    --radius: 0;
+
+    /* Sidebar - Government Style */
+    --sidebar-background: 210 20% 97%;
+    --sidebar-foreground: 210 11% 15%;
+    --sidebar-primary: 210 100% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 92%;
+    --sidebar-accent-foreground: 210 100% 25%;
+    --sidebar-border: 210 20% 85%;
+    --sidebar-ring: 210 100% 25%;
+
+    /* Government specific tokens */
+    --govt-blue: 210 100% 25%;
+    --govt-blue-light: 210 60% 95%;
+    --govt-green: 145 63% 32%;
+    --govt-green-light: 145 40% 95%;
+    --govt-orange: 25 95% 53%;
+    --govt-orange-light: 25 60% 95%;
+    --govt-grey: 210 10% 50%;
+    --govt-grey-light: 210 10% 95%;
+    --govt-table-header: 210 30% 90%;
+    --govt-table-border: 210 20% 75%;
+  }
+
+  .dark {
+    --background: 210 15% 10%;
+    --foreground: 210 20% 95%;
+
+    --card: 210 15% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 210 15% 12%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 210 80% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 20%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 210 15% 18%;
+    --muted-foreground: 210 15% 60%;
+
+    --accent: 145 50% 40%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 15% 25%;
+    --input: 210 15% 25%;
+    --ring: 210 80% 50%;
+
+    --sidebar-background: 210 15% 8%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 210 80% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 15% 15%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 210 15% 20%;
+    --sidebar-ring: 210 80% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-govt;
+  }
+
+  /* Government Table Styles */
+  .govt-table {
+    @apply w-full border-collapse;
+  }
+
+  .govt-table th {
+    @apply bg-govt-table-header text-left p-2 border border-govt-table-border font-semibold text-sm;
+  }
+
+  .govt-table td {
+    @apply p-2 border border-govt-table-border text-sm;
+  }
+
+  .govt-table tr:nth-child(even) {
+    @apply bg-muted/30;
+  }
+
+  /* Government Info Box */
+  .govt-info-box {
+    @apply border border-primary/30 bg-govt-blue-light p-4 mb-4;
+  }
+
+  /* Government Section Box */
+  .govt-section {
+    @apply border border-border bg-background p-4 mb-4;
+  }
+
+  /* Government Header */
+  .govt-header {
+    @apply bg-primary text-primary-foreground p-3 mb-4;
+  }
+
+  /* Government Button */
+  .govt-btn {
+    @apply bg-primary text-primary-foreground px-4 py-2 border-none cursor-pointer text-sm font-medium;
+  }
+
+  .govt-btn:hover {
+    @apply bg-primary/90;
+  }
+
+  .govt-btn-secondary {
+    @apply bg-muted text-foreground px-4 py-2 border border-border cursor-pointer text-sm;
+  }
+
+  /* Government Input */
+  .govt-input {
+    @apply border border-border p-2 text-sm w-full bg-background;
+  }
+
+  .govt-select {
+    @apply border border-border p-2 text-sm bg-background;
+  }
+
+  /* Breadcrumb */
+  .govt-breadcrumb {
+    @apply text-sm text-muted-foreground mb-4 py-2 border-b border-border;
+  }
+
+  .govt-breadcrumb a {
+    @apply text-primary no-underline;
+  }
+
+  .govt-breadcrumb a:hover {
+    @apply underline;
+  }
+
+  /* Status badges */
+  .status-received, .status-compliant, .status-verified {
+    @apply text-accent font-medium;
+  }
+
+  .status-pending, .status-under-review {
+    @apply text-warning font-medium;
+  }
+
+  .status-non-compliant {
+    @apply text-destructive font-medium;
+  }
+}
