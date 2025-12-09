@@ -361,7 +361,7 @@ const CustomerView: React.FC = () => {
                                                 {event.location.latitude && event.location.longitude && (
                                                     <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                                                         <MapPin className="h-3 w-3" />
-                                                        {event.location.latitude.toFixed(4)}, {event.location.longitude.toFixed(4)}
+                                                        {Number(event.location.latitude).toFixed(4)}, {Number(event.location.longitude).toFixed(4)}
                                                     </p>
                                                 )}
                                             </div>
