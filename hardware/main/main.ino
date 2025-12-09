@@ -7,6 +7,7 @@
  - NEO-6M GPS (SoftwareSerial)
  - Fan control logic with hysteresis
  - JSON POST to BACKEND_URL (no auth header)
+ - NTP time sync for accurate timestamps
  
  Wiring (NodeMCU labels / recommended pins):
   DS18B20 data -> D1 (GPIO5)
@@ -30,12 +31,16 @@
    - DHT
    - TinyGPSPlus
    - SoftwareSerial
+   - NTPClient (for time sync)
 */
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
+#include <time.h>
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -75,8 +80,18 @@ const float HYSTERESIS_C = 1.0;
 // Set to false if Relay turns ON with LOW signal (Common for optocoupler modules)
 const bool RELAY_ACTIVE_HIGH = true;
 
+// NTP Configuration
+const char* NTP_SERVER = "pool.ntp.org";
+const long UTC_OFFSET_SEC = 0;  // UTC timezone, adjust if needed (e.g., 19800 for IST +5:30)
+const int NTP_UPDATE_INTERVAL_MS = 60000; // Update NTP every 60 seconds
+
 // ---------------------------------------------------
 ESP8266WebServer server(80);
+
+// NTP Client
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, NTP_SERVER, UTC_OFFSET_SEC, NTP_UPDATE_INTERVAL_MS);
+bool ntpInitialized = false;
 
 OneWire oneWire(DS18B20_PIN);
 DallasTemperature sensors(&oneWire);
@@ -116,6 +131,9 @@ void beep(int times, int toneMs = 120);
 bool sendToBackend();
 void setupServerRoutes();
 bool buttonLongPressed();
+void initNTP();
+unsigned long getEpochTime();
+bool checkWiFiConnection();
 
 // ---------------- EEPROM helpers ----------------
 void saveStringToEEPROM(int addr, const String &str) {
@@ -241,6 +259,8 @@ void setup() {
 
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
+  // Ensure buzzer is off at boot
+  digitalWrite(BUZZER_PIN, LOW);
   // Ensure relay is off at boot
   if (RELAY_ACTIVE_HIGH) digitalWrite(RELAY_PIN, LOW); else digitalWrite(RELAY_PIN, HIGH);
   setFan(false);
@@ -258,6 +278,8 @@ void setup() {
   } else {
     // try to connect to WiFi
     WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);  // Enable auto-reconnect
+    WiFi.persistent(true);        // Save WiFi config to flash
     WiFi.begin(storedSSID.c_str(), storedPASS.c_str());
     Serial.printf("Trying WiFi (%s) ...\n", storedSSID.c_str());
     unsigned long t0 = millis();
@@ -265,10 +287,14 @@ void setup() {
     while (millis() - t0 < 20000) {
       if (WiFi.status() == WL_CONNECTED) { connected=true; break; }
       delay(500);
+      Serial.print(".");
     }
+    Serial.println();
     if (connected) {
       Serial.println("WiFi connected OK: " + WiFi.localIP().toString());
-      beep(2,100);
+      beep(1, 80);  // Single short beep on connect (reduced from 2 beeps)
+      // Initialize NTP after WiFi connection
+      initNTP();
     } else {
       Serial.println("WiFi failed - open AP");
       startAP();
@@ -347,47 +373,172 @@ void readGPS(){
   }
 }
 
+// Initialize NTP time client
+void initNTP() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  
+  Serial.println("Initializing NTP...");
+  timeClient.begin();
+  
+  // Try to get time with retries
+  int retries = 0;
+  while (!timeClient.update() && retries < 5) {
+    timeClient.forceUpdate();
+    delay(500);
+    retries++;
+  }
+  
+  if (timeClient.isTimeSet()) {
+    ntpInitialized = true;
+    Serial.printf("NTP time synced: %lu (epoch)\n", timeClient.getEpochTime());
+  } else {
+    Serial.println("NTP sync failed - will use server time");
+    ntpInitialized = false;
+  }
+}
+
+// Get current epoch time (returns 0 if not available, backend will use server time)
+unsigned long getEpochTime() {
+  if (!ntpInitialized) return 0;
+  
+  // Update NTP periodically
+  timeClient.update();
+  
+  unsigned long epochTime = timeClient.getEpochTime();
+  // Sanity check - epoch should be after year 2020 (1577836800)
+  if (epochTime < 1577836800) {
+    return 0;  // Return 0 to signal invalid time
+  }
+  return epochTime;
+}
+
+// Check and maintain WiFi connection
+bool checkWiFiConnection() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
+  
+  Serial.println("WiFi disconnected, attempting reconnect...");
+  WiFi.disconnect();
+  delay(100);
+  WiFi.begin(storedSSID.c_str(), storedPASS.c_str());
+  
+  unsigned long startAttempt = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("WiFi reconnected: " + WiFi.localIP().toString());
+    // Re-init NTP after reconnection
+    if (!ntpInitialized) {
+      initNTP();
+    }
+    return true;
+  }
+  
+  Serial.println("WiFi reconnection failed");
+  return false;
+}
+
 // send JSON to backend (no auth headers)
 bool sendToBackend(){
   // Check backend string
-  if (storedBACKEND.length() < 5) return false;
-  if (WiFi.status() != WL_CONNECTED) return false;
+  if (storedBACKEND.length() < 5) {
+    Serial.println("Backend URL not configured");
+    return false;
+  }
   
-  String url = storedBACKEND; 
-  unsigned long ts = (unsigned long)(millis()/1000);
+  // Check WiFi connection
+  if (!checkWiFiConnection()) {
+    Serial.println("No WiFi connection");
+    return false;
+  }
+  
+  String url = storedBACKEND;
+  
+  // Get proper epoch timestamp from NTP (or 0 if not available - backend will use server time)
+  unsigned long ts = getEpochTime();
+  
+  // Build JSON payload
   String payload = "{";
   payload += "\"batch_id\":\"" + storedBATCH + "\",";
   payload += "\"device_role\":\"truck\",";
-  payload += "\"crate_temp\":" + String(crateTemp,2) + ",";
-  payload += "\"reefer_temp\":" + String(ambientTemp,2) + ",";
-  payload += "\"humidity\":" + String(humidityVal,2) + ",";
+  
+  // Handle NaN values properly
+  if (!isnan(crateTemp)) {
+    payload += "\"crate_temp\":" + String(crateTemp, 2) + ",";
+  } else {
+    payload += "\"crate_temp\":null,";
+  }
+  
+  if (!isnan(ambientTemp)) {
+    payload += "\"reefer_temp\":" + String(ambientTemp, 2) + ",";
+  } else {
+    payload += "\"reefer_temp\":null,";
+  }
+  
+  if (!isnan(humidityVal)) {
+    payload += "\"humidity\":" + String(humidityVal, 2) + ",";
+  } else {
+    payload += "\"humidity\":null,";
+  }
+  
   payload += "\"lat\":" + String(lastLat, 6) + ",";
   payload += "\"lon\":" + String(lastLng, 6) + ",";
   payload += "\"fan_on\":" + String(fanState ? "true" : "false") + ",";
-  payload += "\"ts\":" + String(ts);
+  
+  // Only include ts if we have valid NTP time, otherwise let backend use server time
+  if (ts > 0) {
+    payload += "\"ts\":" + String(ts);
+  } else {
+    payload += "\"ts\":null";  // Backend will use current server time
+  }
   payload += "}";
+
+  Serial.println("Sending payload: " + payload);
+  Serial.println("To URL: " + url);
 
   int code = -1;
   // Try up to 3 times
-  for (int i=0; i<3; i++) {
+  for (int i = 0; i < 3; i++) {
     WiFiClient client;
     HTTPClient http;
-    http.begin(client, url);
+    
+    // Configure HTTP client
+    http.setReuse(false);  // Don't reuse connections
+    
+    if (!http.begin(client, url)) {
+      Serial.printf("POST Attempt %d: http.begin() failed\n", i + 1);
+      delay(1000);
+      continue;
+    }
+    
     http.addHeader("Content-Type", "application/json");
-    http.setTimeout(3000); // 3s timeout
+    http.setTimeout(10000);  // 10s timeout (increased from 3s)
     
     code = http.POST(payload);
+    
     if (code >= 200 && code < 300) {
       Serial.printf("POST %s -> %d\n", url.c_str(), code);
       String resp = http.getString();
       Serial.println("Resp: " + resp);
       http.end();
       return true; // Success
+    } else if (code > 0) {
+      // Got a response but not success
+      Serial.printf("POST Attempt %d failed: HTTP %d\n", i + 1, code);
+      String resp = http.getString();
+      Serial.println("Error response: " + resp);
     } else {
-      Serial.printf("POST Attempt %d failed: code %d (%s)\n", i+1, code, http.errorToString(code).c_str());
-      http.end();
-      delay(1000); // wait 1s before retry
+      // Connection error
+      Serial.printf("POST Attempt %d failed: code %d (%s)\n", i + 1, code, http.errorToString(code).c_str());
     }
+    
+    http.end();
+    delay(2000); // Wait 2s before retry
   }
   return false;
 }
@@ -421,6 +572,11 @@ void loop() {
   // read GPS frequently
   readGPS();
 
+  // Update NTP time periodically when connected
+  if (ntpInitialized && WiFi.status() == WL_CONNECTED) {
+    timeClient.update();
+  }
+
   unsigned long now = millis();
   if (now - lastSensorRead >= SENSOR_READ_INTERVAL_MS) {
     readSensors();
@@ -429,9 +585,14 @@ void loop() {
   }
 
   if (now - lastSend >= SEND_INTERVAL_MS) {
-    if (WiFi.status() == WL_CONNECTED) {
+    // Only attempt to send if we have WiFi
+    if (checkWiFiConnection()) {
       bool ok = sendToBackend();
-      if (!ok) Serial.println("Send failed");
+      if (!ok) {
+        Serial.println("Send failed after all retries");
+      }
+    } else {
+      Serial.println("Skipping send - no WiFi connection");
     }
     lastSend = now;
   }

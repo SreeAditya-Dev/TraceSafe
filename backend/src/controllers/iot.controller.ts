@@ -17,7 +17,7 @@ export async function ingestReading(req: Request, res: Response) {
      "lat": 12.34,
      "lon": 80.12,
      "fan_on": true,
-     "ts": 1733225334
+     "ts": 1733225334  // epoch seconds or null (server will use current time)
    }
   */
   try {
@@ -38,12 +38,16 @@ export async function ingestReading(req: Request, res: Response) {
       return res.status(400).json({ error: "batch_id, device_role required" });
     }
 
-    // If ts is missing or looks like uptime (small integer), use server time
+    // If ts is missing, null, or invalid (too small = uptime not epoch), use server time
+    // Valid epoch timestamps should be > 1577836800 (Jan 1, 2020)
     let timest: Date;
-    if (!ts || Number(ts) < 1000000000) {
+    const tsNum = Number(ts);
+    if (!ts || ts === null || isNaN(tsNum) || tsNum < 1577836800) {
       timest = new Date();
+      console.log(`Using server time: ${timest.toISOString()} (received ts: ${ts})`);
     } else {
-      timest = epochToTimestamptz(Number(ts));
+      timest = epochToTimestamptz(tsNum);
+      console.log(`Using device time: ${timest.toISOString()} (epoch: ${tsNum})`);
     }
 
     const client = await pool.connect();
