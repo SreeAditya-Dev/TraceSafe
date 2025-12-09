@@ -6,23 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Leaf, Truck, Store, ShoppingCart, MapPin,
-    Thermometer, Droplets, CheckCircle, Clock, Share2, ArrowLeft, Box, ExternalLink
+    Thermometer, Droplets, CheckCircle, Clock, Share2, ArrowLeft, Box
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-// Fix Leaflet default marker icon
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
-const DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
+import { RouteMap } from '@/components/RouteMap';
 
 interface JourneyEvent {
     event_type: string;
@@ -135,17 +121,23 @@ const CustomerView: React.FC = () => {
     const getMapCoordinates = () => {
         if (!data) return [];
 
-        const coords: [number, number][] = [];
+        const coords: { lat: number; lng: number }[] = [];
 
         // Add origin if available
         if (data.batch.origin.latitude && data.batch.origin.longitude) {
-            coords.push([data.batch.origin.latitude, data.batch.origin.longitude]);
+            coords.push({
+                lat: Number(data.batch.origin.latitude),
+                lng: Number(data.batch.origin.longitude)
+            });
         }
 
         // Add journey coordinates
         data.journey.forEach(event => {
             if (event.location.latitude && event.location.longitude) {
-                coords.push([event.location.latitude, event.location.longitude]);
+                coords.push({
+                    lat: Number(event.location.latitude),
+                    lng: Number(event.location.longitude)
+                });
             }
         });
 
@@ -307,26 +299,7 @@ const CustomerView: React.FC = () => {
                         </CardHeader>
                         <CardContent>
                             <div className="h-64 rounded-lg overflow-hidden">
-                                <MapContainer
-                                    center={mapCoordinates[0]}
-                                    zoom={10}
-                                    style={{ height: '100%', width: '100%' }}
-                                >
-                                    <TileLayer
-                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                    />
-                                    {mapCoordinates.map((coord, idx) => (
-                                        <Marker key={idx} position={coord}>
-                                            <Popup>
-                                                {idx === 0 ? 'Origin' : `Stop ${idx}`}
-                                            </Popup>
-                                        </Marker>
-                                    ))}
-                                    {mapCoordinates.length > 1 && (
-                                        <Polyline positions={mapCoordinates} color="green" weight={3} />
-                                    )}
-                                </MapContainer>
+                                <RouteMap coordinates={mapCoordinates} />
                             </div>
                         </CardContent>
                     </Card>

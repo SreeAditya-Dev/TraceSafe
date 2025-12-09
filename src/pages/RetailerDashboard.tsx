@@ -86,7 +86,7 @@ const RetailerDashboard: React.FC = () => {
 
         setIsProcessing(true);
         try {
-            await batchAPI.receive(loadedBatch.batch_id, {
+            const response = await batchAPI.receive(loadedBatch.batch_id, {
                 latitude: parseFloat(location.lat) || 0,
                 longitude: parseFloat(location.lng) || 0,
                 notes: 'Received at retail location',
@@ -94,10 +94,11 @@ const RetailerDashboard: React.FC = () => {
 
             toast({
                 title: 'Batch Received',
-                description: `${loadedBatch.batch_id} added to inventory`,
+                description: `${loadedBatch.batch_id} added to inventory${response.data.blockchain_tx_id ? ` (TX: ${response.data.blockchain_tx_id.substring(0, 8)}...)` : ''}`,
             });
 
-            loadData();
+            // Refresh data after successful blockchain transaction
+            await loadData();
             setLoadedBatch(null);
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Receive failed';
@@ -114,16 +115,17 @@ const RetailerDashboard: React.FC = () => {
     const handleSell = async (batchId: string) => {
         setIsProcessing(true);
         try {
-            await batchAPI.sell(batchId, {
+            const response = await batchAPI.sell(batchId, {
                 notes: 'Sold to customer',
             });
 
             toast({
                 title: 'Batch Sold',
-                description: `${batchId} marked as sold`,
+                description: `${batchId} marked as sold${response.data.blockchain_tx_id ? ` (TX: ${response.data.blockchain_tx_id.substring(0, 8)}...)` : ''}`,
             });
 
-            loadData();
+            // Refresh data after successful blockchain transaction
+            await loadData();
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Sale failed';
             toast({

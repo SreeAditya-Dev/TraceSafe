@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
     Tractor, Plus, QrCode, MapPin, Package, CheckCircle,
-    AlertCircle, LogOut, Search, Leaf
+    AlertCircle, LogOut, Search, Leaf, Star
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -30,6 +30,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { LocationInput } from '@/components/LocationInput';
+import { CameraInput } from '@/components/CameraInput';
+import { MapboxLocationInput } from '@/components/MapboxLocationInput';
 
 interface Batch {
     id: string;
@@ -76,6 +78,7 @@ const FarmerDashboard: React.FC = () => {
         unit: 'kg',
         harvestDate: new Date().toISOString().split('T')[0],
         address: '',
+        image: null as string | null,
     });
     const [isCreating, setIsCreating] = useState(false);
     const [createdQR, setCreatedQR] = useState<string | null>(null);
@@ -173,6 +176,13 @@ const FarmerDashboard: React.FC = () => {
             if (location.lat && location.lng) {
                 formData.append('latitude', location.lat);
                 formData.append('longitude', location.lng);
+            }
+
+            if (batchForm.image) {
+                // Convert base64 to blob
+                const fetchRes = await fetch(batchForm.image);
+                const blob = await fetchRes.blob();
+                formData.append('image', blob, 'batch-image.jpg');
             }
 
             const response = await batchAPI.create(formData);
@@ -326,6 +336,49 @@ const FarmerDashboard: React.FC = () => {
                     </Card>
                 )}
 
+                {/* TraceSafe Score Card */}
+                {profile?.agristack_id && (
+                    <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-blue-800">
+                                <Star className="h-5 w-5 fill-yellow-400 text-yellow-600" />
+                                TraceSafe Score
+                            </CardTitle>
+                            <CardDescription>
+                                Your reliability score based on successful deliveries and verification
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex items-center gap-6">
+                                <div className="relative h-24 w-24 flex items-center justify-center rounded-full border-4 border-blue-200 bg-white shadow-sm">
+                                    <div className="text-center">
+                                        <span className="text-2xl font-bold text-blue-700">
+                                            {profile.reliability_score || '50.0'}
+                                        </span>
+                                        <span className="block text-xs text-gray-400">/ 100</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-2 flex-1">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Total Batches</span>
+                                        <span className="font-medium">{profile.total_batches || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Successful Deliveries</span>
+                                        <span className="font-medium">{profile.successful_batches || 0}</span>
+                                    </div>
+                                    <div className="h-2 w-full bg-blue-200 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                                            style={{ width: `${profile.reliability_score || 50}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {/* Actions */}
                 <div className="flex gap-4">
                     <Dialog open={showCreateBatch} onOpenChange={setShowCreateBatch}>
@@ -335,7 +388,7 @@ const FarmerDashboard: React.FC = () => {
                                 Create New Batch
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-md">
+                        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>Create New Batch</DialogTitle>
                                 <DialogDescription>
@@ -430,7 +483,15 @@ const FarmerDashboard: React.FC = () => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <LocationInput
+                                        <Label>Batch Photo</Label>
+                                        <CameraInput
+                                            onCapture={(img) => setBatchForm({ ...batchForm, image: img })}
+                                            label="Take Photo of Produce"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <MapboxLocationInput
                                             latitude={location.lat}
                                             longitude={location.lng}
                                             onChange={(lat, lng) => setLocation({ lat, lng })}

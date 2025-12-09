@@ -287,7 +287,7 @@ func (t *TraceSafeContract) RecordReceipt(ctx contractapi.TransactionContextInte
 		return err
 	}
 
-	if batch.Status != "delivered" {
+	if batch.Status != "delivered" && batch.Status != "in_transit" {
 		return fmt.Errorf("batch must be delivered to receive")
 	}
 

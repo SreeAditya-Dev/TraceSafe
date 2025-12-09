@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "react-map-gl": path.resolve(__dirname, "node_modules/react-map-gl/dist/mapbox.js"),
     },
   },
 }));

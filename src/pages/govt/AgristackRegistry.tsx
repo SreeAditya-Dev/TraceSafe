@@ -1,17 +1,84 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GovtBreadcrumb from "@/components/govt/GovtBreadcrumb";
 import GovtTable from "@/components/govt/GovtTable";
-import { farmerRegistry, sampleFarmer, stateOptions, farmerRecords } from "@/data/govtData";
+import { agristackAPI } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 const AgristackRegistry = () => {
+  const { toast } = useToast();
   const [farmerId, setFarmerId] = useState("");
   const [state, setState] = useState("");
   const [district, setDistrict] = useState("");
   const [village, setVillage] = useState("");
   const [showResult, setShowResult] = useState(false);
+  const [searchResult, setSearchResult] = useState<any>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const handleSearch = () => {
+  const [stats, setStats] = useState({
+    total_registered: 0,
+    total_verified: 0,
+    pending_verification: 0,
+    linked_to_tracesafe: 0
+  });
+
+  const [farmersList, setFarmersList] = useState([]);
+  const [isLoadingList, setIsLoadingList] = useState(true);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      const [statsRes, farmersRes] = await Promise.all([
+        agristackAPI.getStats(),
+        agristackAPI.getFarmers({ limit: 10 })
+      ]);
+      setStats(statsRes.data);
+      setFarmersList(farmersRes.data.farmers);
+    } catch (error) {
+      console.error("Failed to load dashboard data", error);
+    } finally {
+      setIsLoadingList(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!farmerId) {
+      toast({
+        title: "Input Required",
+        description: "Please enter a Farmer ID to search",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSearching(true);
     setShowResult(true);
+    setSearchResult(null);
+
+    try {
+      const response = await agristackAPI.verifyFarmer(farmerId);
+      if (response.data.exists) {
+        setSearchResult(response.data.farmer);
+      } else {
+        setSearchResult(null);
+        toast({
+          title: "Not Found",
+          description: "Farmer ID not found in registry",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Search failed", error);
+      toast({
+        title: "Error",
+        description: "Failed to search farmer registry",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const registryStatsColumns = [
@@ -20,10 +87,10 @@ const AgristackRegistry = () => {
   ];
 
   const registryStatsData = [
-    { metric: "Total Farmers Registered", value: farmerRegistry.totalRegistered.toLocaleString() },
-    { metric: "Total Verified", value: farmerRegistry.totalVerified.toLocaleString() },
-    { metric: "Pending Verification", value: farmerRegistry.pendingVerification.toLocaleString() },
-    { metric: "Linked to TraceSafe", value: farmerRegistry.linkedToTraceSafe.toLocaleString() },
+    { metric: "Total Farmers Registered", value: stats.total_registered.toLocaleString() },
+    { metric: "Total Verified", value: stats.total_verified.toLocaleString() },
+    { metric: "Pending Verification", value: stats.pending_verification.toLocaleString() },
+    { metric: "Linked to TraceSafe", value: stats.linked_to_tracesafe.toLocaleString() },
   ];
 
   return (
@@ -42,7 +109,7 @@ const AgristackRegistry = () => {
 
       <div className="govt-info-box" style={{ backgroundColor: "hsl(var(--govt-green-light))", borderColor: "hsl(var(--govt-green) / 0.3)" }}>
         <p className="m-0 text-sm">
-          AgriStack is the unified digital infrastructure for agriculture in India. This page provides access to farmer registry 
+          AgriStack is the unified digital infrastructure for agriculture in India. This page provides access to farmer registry
           information linked with the TraceSafe traceability platform.
         </p>
       </div>
@@ -68,9 +135,9 @@ const AgristackRegistry = () => {
               onChange={(e) => setState(e.target.value)}
             >
               <option value="">Select State</option>
-              {stateOptions.slice(1).map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
+              <option value="Tamil Nadu">Tamil Nadu</option>
+              <option value="Maharashtra">Maharashtra</option>
+              <option value="Karnataka">Karnataka</option>
             </select>
           </div>
           <div>
@@ -94,59 +161,51 @@ const AgristackRegistry = () => {
             />
           </div>
           <div className="flex items-end">
-            <button className="govt-btn bg-govt-green hover:bg-govt-green/90" onClick={handleSearch}>
-              Search
+            <button
+              className="govt-btn bg-govt-green hover:bg-govt-green/90"
+              onClick={handleSearch}
+              disabled={isSearching}
+            >
+              {isSearching ? 'Searching...' : 'Search'}
             </button>
           </div>
         </div>
       </div>
 
-      {showResult && (
+      {showResult && searchResult && (
         <div className="govt-section">
           <h2 className="text-base font-semibold mb-4 pb-2 border-b border-border">Farmer Profile Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <div className="flex border-b border-border pb-2">
                 <span className="font-medium w-40 text-sm">Farmer ID:</span>
-                <span className="text-sm">{sampleFarmer.farmerId}</span>
+                <span className="text-sm">{searchResult.farmer_id}</span>
               </div>
               <div className="flex border-b border-border pb-2">
                 <span className="font-medium w-40 text-sm">Name:</span>
-                <span className="text-sm">{sampleFarmer.name}</span>
+                <span className="text-sm">{searchResult.name}</span>
               </div>
               <div className="flex border-b border-border pb-2">
-                <span className="font-medium w-40 text-sm">State:</span>
-                <span className="text-sm">{sampleFarmer.state}</span>
-              </div>
-              <div className="flex border-b border-border pb-2">
-                <span className="font-medium w-40 text-sm">District:</span>
-                <span className="text-sm">{sampleFarmer.district}</span>
-              </div>
-              <div className="flex border-b border-border pb-2">
-                <span className="font-medium w-40 text-sm">Village:</span>
-                <span className="text-sm">{sampleFarmer.village}</span>
+                <span className="font-medium w-40 text-sm">Land:</span>
+                <span className="text-sm">{searchResult.land}</span>
               </div>
             </div>
             <div className="space-y-3">
               <div className="flex border-b border-border pb-2">
-                <span className="font-medium w-40 text-sm">Landholding:</span>
-                <span className="text-sm">{sampleFarmer.landholding}</span>
-              </div>
-              <div className="flex border-b border-border pb-2">
                 <span className="font-medium w-40 text-sm">Crops:</span>
-                <span className="text-sm">{sampleFarmer.crops}</span>
+                <span className="text-sm">{searchResult.crops}</span>
               </div>
               <div className="flex border-b border-border pb-2">
-                <span className="font-medium w-40 text-sm">Registration Status:</span>
-                <span className="text-sm status-verified">{sampleFarmer.registrationStatus}</span>
+                <span className="font-medium w-40 text-sm">Registry Status:</span>
+                <span className={`text-sm ${searchResult.verified ? 'status-verified' : 'status-pending'}`}>
+                  {searchResult.registry_status}
+                </span>
               </div>
               <div className="flex border-b border-border pb-2">
-                <span className="font-medium w-40 text-sm">Verification Status:</span>
-                <span className="text-sm status-verified">{sampleFarmer.verificationStatus}</span>
-              </div>
-              <div className="flex border-b border-border pb-2">
-                <span className="font-medium w-40 text-sm">Registration Date:</span>
-                <span className="text-sm">{sampleFarmer.registrationDate}</span>
+                <span className="font-medium w-40 text-sm">Verification:</span>
+                <span className={`text-sm ${searchResult.verified ? 'status-verified' : 'status-pending'}`}>
+                  {searchResult.verified ? 'Verified' : 'Pending'}
+                </span>
               </div>
             </div>
           </div>
@@ -166,7 +225,7 @@ const AgristackRegistry = () => {
         </div>
         <GovtTable columns={registryStatsColumns} data={registryStatsData} />
         <p className="text-xs text-muted-foreground mt-2">
-          Statistics as of 09-12-2024 | Data Source: AgriStack Portal
+          Statistics as of {new Date().toLocaleDateString()} | Data Source: AgriStack Portal
         </p>
       </div>
 
@@ -177,19 +236,23 @@ const AgristackRegistry = () => {
             <button className="govt-btn-secondary">Download List</button>
           </div>
         </div>
-        <GovtTable
-          columns={[
-            { key: "farmer_id", header: "Farmer ID" },
-            { key: "name", header: "Name" },
-            { key: "land", header: "Land" },
-            { key: "crops", header: "Crops" },
-            { key: "verified", header: "Verified" },
-            { key: "registry_status", header: "Registry Status" },
-          ]}
-          data={farmerRecords.map(f => ({ ...f, verified: f.verified ? "Yes" : "No" }))}
-        />
+        {isLoadingList ? (
+          <div className="text-center py-4">Loading data...</div>
+        ) : (
+          <GovtTable
+            columns={[
+              { key: "farmer_id", header: "Farmer ID" },
+              { key: "name", header: "Name" },
+              { key: "land", header: "Land" },
+              { key: "crops", header: "Crops" },
+              { key: "verified", header: "Verified" },
+              { key: "registry_status", header: "Registry Status" },
+            ]}
+            data={farmersList.map((f: any) => ({ ...f, verified: f.verified ? "Yes" : "No" }))}
+          />
+        )}
         <p className="text-xs text-muted-foreground mt-2">
-          Showing {farmerRecords.length} records | Data Source: AgriStack Portal
+          Showing {farmersList.length} records | Data Source: AgriStack Portal
         </p>
       </div>
 

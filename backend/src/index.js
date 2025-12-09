@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js';
 import agristackRoutes from './routes/agristack.js';
 import batchRoutes from './routes/batches.js';
 import mediaRoutes from './routes/media.js';
+import govtRoutes from './routes/govt.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -48,6 +49,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/agristack', agristackRoutes);
 app.use('/api/batches', batchRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/govt', govtRoutes);
 
 // Dashboard stats endpoint
 app.get('/api/stats', async (req, res) => {

@@ -1,14 +1,66 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GovtBreadcrumb from "@/components/govt/GovtBreadcrumb";
 import GovtTable from "@/components/govt/GovtTable";
-import { fssaiLicenseData, batchComplianceData, recallNotices } from "@/data/govtData";
+import { govtAPI } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
+import { recallNotices } from "@/data/govtData"; // Keeping recall notices static for now
 
 const FssaiCompliance = () => {
+  const { toast } = useToast();
   const [licenseNumber, setLicenseNumber] = useState("");
   const [showLicenseResult, setShowLicenseResult] = useState(false);
+  const [licenseData, setLicenseData] = useState<any>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const handleLicenseCheck = () => {
+  const [complianceData, setComplianceData] = useState([]);
+  const [isLoadingCompliance, setIsLoadingCompliance] = useState(true);
+
+  useEffect(() => {
+    loadComplianceData();
+  }, []);
+
+  const loadComplianceData = async () => {
+    try {
+      const response = await govtAPI.getFssaiCompliance();
+      setComplianceData(response.data);
+    } catch (error) {
+      console.error("Failed to load compliance data", error);
+    } finally {
+      setIsLoadingCompliance(false);
+    }
+  };
+
+  const handleLicenseCheck = async () => {
+    if (!licenseNumber || licenseNumber.length !== 14) {
+      toast({
+        title: "Invalid Input",
+        description: "Please enter a valid 14-digit FSSAI License Number",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsVerifying(true);
     setShowLicenseResult(true);
+    setLicenseData(null);
+
+    try {
+      const response = await govtAPI.verifyFssaiLicense(licenseNumber);
+      if (response.data.valid) {
+        setLicenseData(response.data);
+      } else {
+        setLicenseData(response.data); // Contains error status
+      }
+    } catch (error) {
+      console.error("Verification failed", error);
+      toast({
+        title: "Error",
+        description: "License verification failed",
+        variant: "destructive"
+      });
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const complianceColumns = [
@@ -52,7 +104,7 @@ const FssaiCompliance = () => {
 
       <div className="govt-info-box" style={{ backgroundColor: "hsl(var(--govt-orange-light))", borderColor: "hsl(var(--govt-orange) / 0.3)" }}>
         <p className="m-0 text-sm">
-          Food Safety and Standards Authority of India (FSSAI) Traceability Compliance Module. 
+          Food Safety and Standards Authority of India (FSSAI) Traceability Compliance Module.
           This interface provides compliance status of food batches tracked through the TraceSafe platform.
         </p>
       </div>
@@ -70,44 +122,54 @@ const FssaiCompliance = () => {
               onChange={(e) => setLicenseNumber(e.target.value)}
             />
           </div>
-          <button className="govt-btn bg-govt-orange hover:bg-govt-orange/90" onClick={handleLicenseCheck}>
-            Submit
+          <button
+            className="govt-btn bg-govt-orange hover:bg-govt-orange/90"
+            onClick={handleLicenseCheck}
+            disabled={isVerifying}
+          >
+            {isVerifying ? 'Verifying...' : 'Submit'}
           </button>
         </div>
 
-        {showLicenseResult && (
+        {showLicenseResult && licenseData && (
           <div className="mt-4 p-4 border border-border bg-muted/30">
             <h3 className="text-sm font-semibold mb-3 pb-2 border-b border-border">License Verification Result</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="flex">
-                <span className="font-medium w-36 text-sm">License Number:</span>
-                <span className="text-sm">{fssaiLicenseData.licenseNumber}</span>
+            {licenseData.valid ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex">
+                  <span className="font-medium w-36 text-sm">License Number:</span>
+                  <span className="text-sm">{licenseData.licenseNumber}</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-36 text-sm">Entity Name:</span>
+                  <span className="text-sm">{licenseData.entityName}</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-36 text-sm">Entity Type:</span>
+                  <span className="text-sm">{licenseData.entityType}</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-36 text-sm">Status:</span>
+                  <span className="text-sm status-compliant font-medium">{licenseData.status}</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-36 text-sm">Issue Date:</span>
+                  <span className="text-sm">{licenseData.issueDate}</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-36 text-sm">Expiry Date:</span>
+                  <span className="text-sm">{licenseData.expiryDate}</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-36 text-sm">State:</span>
+                  <span className="text-sm">{licenseData.state}</span>
+                </div>
               </div>
-              <div className="flex">
-                <span className="font-medium w-36 text-sm">Entity Name:</span>
-                <span className="text-sm">{fssaiLicenseData.entityName}</span>
+            ) : (
+              <div className="text-destructive font-medium">
+                {licenseData.message || "License verification failed."}
               </div>
-              <div className="flex">
-                <span className="font-medium w-36 text-sm">Entity Type:</span>
-                <span className="text-sm">{fssaiLicenseData.entityType}</span>
-              </div>
-              <div className="flex">
-                <span className="font-medium w-36 text-sm">Status:</span>
-                <span className="text-sm status-compliant font-medium">{fssaiLicenseData.status}</span>
-              </div>
-              <div className="flex">
-                <span className="font-medium w-36 text-sm">Issue Date:</span>
-                <span className="text-sm">{fssaiLicenseData.issueDate}</span>
-              </div>
-              <div className="flex">
-                <span className="font-medium w-36 text-sm">Expiry Date:</span>
-                <span className="text-sm">{fssaiLicenseData.expiryDate}</span>
-              </div>
-              <div className="flex">
-                <span className="font-medium w-36 text-sm">State:</span>
-                <span className="text-sm">{fssaiLicenseData.state}</span>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -120,9 +182,13 @@ const FssaiCompliance = () => {
             <button className="govt-btn-secondary">Download CSV</button>
           </div>
         </div>
-        <GovtTable columns={complianceColumns} data={batchComplianceData} />
+        {isLoadingCompliance ? (
+          <div className="text-center py-4">Loading compliance data...</div>
+        ) : (
+          <GovtTable columns={complianceColumns} data={complianceData} />
+        )}
         <p className="text-xs text-muted-foreground mt-2">
-          Compliance data synchronized from TraceSafe platform | Last Updated: 09-12-2024
+          Compliance data synchronized from TraceSafe platform | Last Updated: {new Date().toLocaleDateString()}
         </p>
       </div>
 

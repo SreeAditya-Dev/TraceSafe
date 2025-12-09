@@ -21,6 +21,9 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { LocationInput } from '@/components/LocationInput';
+import { MapboxLocationInput } from '@/components/MapboxLocationInput';
+import { CameraInput } from '@/components/CameraInput';
+import { RouteMap } from '@/components/RouteMap';
 
 interface Batch {
     id: string;
@@ -45,6 +48,7 @@ const TruckDashboard: React.FC = () => {
     const [scannedBatch, setScannedBatch] = useState<Batch | null>(null);
     const [manualBatchId, setManualBatchId] = useState('');
     const [location, setLocation] = useState<{ lat: string; lng: string }>({ lat: '', lng: '' });
+    const [evidenceImage, setEvidenceImage] = useState<string | null>(null);
 
     // Transit update form
     const [transitForm, setTransitForm] = useState({
@@ -95,11 +99,18 @@ const TruckDashboard: React.FC = () => {
 
         setIsUpdating(true);
         try {
-            await batchAPI.pickup(scannedBatch.batch_id, {
-                latitude: parseFloat(location.lat) || 0,
-                longitude: parseFloat(location.lng) || 0,
-                notes: 'Picked up by driver',
-            });
+            const formData = new FormData();
+            formData.append('latitude', location.lat || '0');
+            formData.append('longitude', location.lng || '0');
+            formData.append('notes', 'Picked up by driver');
+
+            if (evidenceImage) {
+                const fetchRes = await fetch(evidenceImage);
+                const blob = await fetchRes.blob();
+                formData.append('image', blob, 'pickup-evidence.jpg');
+            }
+
+            await batchAPI.pickup(scannedBatch.batch_id, formData);
 
             toast({
                 title: 'Batch Picked Up',
@@ -125,13 +136,20 @@ const TruckDashboard: React.FC = () => {
 
         setIsUpdating(true);
         try {
-            await batchAPI.updateTransit(scannedBatch.batch_id, {
-                latitude: parseFloat(location.lat) || 0,
-                longitude: parseFloat(location.lng) || 0,
-                temperature: transitForm.temperature ? parseFloat(transitForm.temperature) : undefined,
-                humidity: transitForm.humidity ? parseFloat(transitForm.humidity) : undefined,
-                notes: transitForm.notes,
-            });
+            const formData = new FormData();
+            formData.append('latitude', location.lat || '0');
+            formData.append('longitude', location.lng || '0');
+            if (transitForm.temperature) formData.append('temperature', transitForm.temperature);
+            if (transitForm.humidity) formData.append('humidity', transitForm.humidity);
+            formData.append('notes', transitForm.notes);
+
+            if (evidenceImage) {
+                const fetchRes = await fetch(evidenceImage);
+                const blob = await fetchRes.blob();
+                formData.append('image', blob, 'transit-evidence.jpg');
+            }
+
+            await batchAPI.updateTransit(scannedBatch.batch_id, formData);
 
             toast({
                 title: 'Transit Updated',
@@ -156,11 +174,18 @@ const TruckDashboard: React.FC = () => {
 
         setIsUpdating(true);
         try {
-            await batchAPI.deliver(scannedBatch.batch_id, {
-                latitude: parseFloat(location.lat) || 0,
-                longitude: parseFloat(location.lng) || 0,
-                notes: 'Delivered to destination',
-            });
+            const formData = new FormData();
+            formData.append('latitude', location.lat || '0');
+            formData.append('longitude', location.lng || '0');
+            formData.append('notes', 'Delivered to destination');
+
+            if (evidenceImage) {
+                const fetchRes = await fetch(evidenceImage);
+                const blob = await fetchRes.blob();
+                formData.append('image', blob, 'delivery-evidence.jpg');
+            }
+
+            await batchAPI.deliver(scannedBatch.batch_id, formData);
 
             toast({
                 title: 'Batch Delivered',
@@ -260,8 +285,8 @@ const TruckDashboard: React.FC = () => {
                             </Button>
                         </div>
 
-                        <div className="mt-4">
-                            <LocationInput
+                        <div className="mt-4 space-y-4">
+                            <MapboxLocationInput
                                 latitude={location.lat}
                                 longitude={location.lng}
                                 onChange={(lat, lng) => setLocation({ lat, lng })}
@@ -302,10 +327,16 @@ const TruckDashboard: React.FC = () => {
                             </div>
 
                             {scannedBatch.status === 'created' && (
-                                <Button onClick={handlePickup} className="w-full bg-green-600 hover:bg-green-700" disabled={isUpdating}>
-                                    <Package className="h-4 w-4 mr-2" />
-                                    {isUpdating ? 'Processing...' : 'Pickup This Batch'}
-                                </Button>
+                                <div className="space-y-4">
+                                    <CameraInput
+                                        onCapture={setEvidenceImage}
+                                        label="Take Pickup Photo"
+                                    />
+                                    <Button onClick={handlePickup} className="w-full bg-green-600 hover:bg-green-700" disabled={isUpdating}>
+                                        <Package className="h-4 w-4 mr-2" />
+                                        {isUpdating ? 'Processing...' : 'Pickup This Batch'}
+                                    </Button>
+                                </div>
                             )}
 
                             {scannedBatch.status === 'in_transit' && (
@@ -347,6 +378,14 @@ const TruckDashboard: React.FC = () => {
                                             />
                                         </div>
 
+                                        <div className="space-y-2 mt-4">
+                                            <Label>Evidence Photo</Label>
+                                            <CameraInput
+                                                onCapture={setEvidenceImage}
+                                                label="Take Status/Delivery Photo"
+                                            />
+                                        </div>
+
                                         <div className="flex gap-2 mt-4">
                                             <Button onClick={handleTransitUpdate} variant="outline" className="flex-1" disabled={isUpdating}>
                                                 <Send className="h-4 w-4 mr-2" />
@@ -357,6 +396,20 @@ const TruckDashboard: React.FC = () => {
                                                 Mark Delivered
                                             </Button>
                                         </div>
+                                    </div>
+
+                                    {/* Route Map Visualization */}
+                                    <div className="mt-6 border-t pt-4">
+                                        <h4 className="font-medium mb-3 flex items-center gap-2">
+                                            <Navigation className="h-4 w-4" />
+                                            Live Route
+                                        </h4>
+                                        <RouteMap
+                                            originLat={12.9716} // Placeholder origin (Bangalore)
+                                            originLng={77.5946}
+                                            currentLat={Number(location.lat) || 12.9716}
+                                            currentLng={Number(location.lng) || 77.5946}
+                                        />
                                     </div>
                                 </>
                             )}

@@ -1,17 +1,36 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GovtBreadcrumb from "@/components/govt/GovtBreadcrumb";
 import GovtTable from "@/components/govt/GovtTable";
-import {
-  enamCommodityPrices,
-  enamBatchData,
-  commodityOptions,
-  stateOptions,
-} from "@/data/govtData";
+import { govtAPI, batchAPI } from "@/services/api";
+import { commodityOptions, stateOptions } from "@/data/govtData";
 
 const EnamDashboard = () => {
   const [selectedCommodity, setSelectedCommodity] = useState("All Commodities");
   const [selectedState, setSelectedState] = useState("All States");
   const [selectedDate, setSelectedDate] = useState("");
+
+  const [prices, setPrices] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [pricesRes, batchesRes] = await Promise.all([
+        govtAPI.getEnamPrices(),
+        batchAPI.getAll({ limit: 20 })
+      ]);
+      setPrices(pricesRes.data);
+      setBatches(batchesRes.data.batches);
+    } catch (error) {
+      console.error("Failed to load e-NAM data", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const priceColumns = [
     { key: "market", header: "Market" },
@@ -23,30 +42,34 @@ const EnamDashboard = () => {
   ];
 
   const batchColumns = [
-    { key: "batchId", header: "Batch ID" },
-    { key: "commodity", header: "Commodity" },
-    { key: "farmerName", header: "Farmer Name" },
-    { key: "dispatchDate", header: "Dispatch Date" },
+    { key: "batch_id", header: "Batch ID" },
+    { key: "crop", header: "Commodity" },
+    { key: "farmer_name", header: "Farmer Name" },
+    {
+      key: "created_at",
+      header: "Dispatch Date",
+      render: (value: string) => new Date(value).toLocaleDateString()
+    },
     {
       key: "status",
       header: "Status",
       render: (value: string) => (
-        <span className={value === "Received" ? "status-received" : "status-pending"}>
-          {value}
+        <span className={value === "received" ? "status-received" : "status-pending"}>
+          {value.replace('_', ' ').toUpperCase()}
         </span>
       ),
     },
   ];
 
-  const filteredPrices = enamCommodityPrices.filter((item) => {
+  const filteredPrices = prices.filter((item: any) => {
     if (selectedCommodity !== "All Commodities" && item.commodity !== selectedCommodity) {
       return false;
     }
     return true;
   });
 
-  const filteredBatches = enamBatchData.filter((item) => {
-    if (selectedCommodity !== "All Commodities" && item.commodity !== selectedCommodity) {
+  const filteredBatches = batches.filter((item: any) => {
+    if (selectedCommodity !== "All Commodities" && item.crop !== selectedCommodity) {
       return false;
     }
     return true;
@@ -68,7 +91,7 @@ const EnamDashboard = () => {
 
       <div className="govt-info-box">
         <p className="m-0 text-sm">
-          This page displays traceability data shared with the electronic National Agriculture Market (e-NAM). 
+          This page displays traceability data shared with the electronic National Agriculture Market (e-NAM).
           The information presented is synchronized with the central e-NAM portal for commodity price discovery and batch tracking.
         </p>
       </div>
@@ -123,9 +146,13 @@ const EnamDashboard = () => {
             <button className="govt-btn-secondary">Download</button>
           </div>
         </div>
-        <GovtTable columns={priceColumns} data={filteredPrices} />
+        {isLoading ? (
+          <div className="text-center py-4">Loading prices...</div>
+        ) : (
+          <GovtTable columns={priceColumns} data={filteredPrices} />
+        )}
         <p className="text-xs text-muted-foreground mt-2">
-          Source: e-NAM Portal | Last Updated: 09-12-2024
+          Source: e-NAM Portal | Last Updated: {new Date().toLocaleDateString()}
         </p>
       </div>
 
@@ -137,7 +164,11 @@ const EnamDashboard = () => {
             <button className="govt-btn-secondary">Download</button>
           </div>
         </div>
-        <GovtTable columns={batchColumns} data={filteredBatches} />
+        {isLoading ? (
+          <div className="text-center py-4">Loading batches...</div>
+        ) : (
+          <GovtTable columns={batchColumns} data={filteredBatches} />
+        )}
         <p className="text-xs text-muted-foreground mt-2">
           Data synchronized from TraceSafe platform
         </p>

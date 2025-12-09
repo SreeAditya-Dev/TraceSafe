@@ -77,14 +77,20 @@ export const batchAPI = {
     getById: (batchId: string) =>
         api.get(`/api/batches/${batchId}`),
 
-    pickup: (batchId: string, data: { latitude?: number; longitude?: number; notes?: string }) =>
-        api.post(`/api/batches/${batchId}/pickup`, data),
+    pickup: (batchId: string, data: { latitude?: number; longitude?: number; notes?: string; image?: string | null } | FormData) =>
+        api.post(`/api/batches/${batchId}/pickup`, data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+        }),
 
-    updateTransit: (batchId: string, data: { latitude?: number; longitude?: number; temperature?: number; humidity?: number; notes?: string }) =>
-        api.post(`/api/batches/${batchId}/transit`, data),
+    updateTransit: (batchId: string, data: { latitude?: number; longitude?: number; temperature?: number; humidity?: number; notes?: string; image?: string | null } | FormData) =>
+        api.post(`/api/batches/${batchId}/transit`, data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+        }),
 
-    deliver: (batchId: string, data: { latitude?: number; longitude?: number; retailerId?: string; notes?: string }) =>
-        api.post(`/api/batches/${batchId}/deliver`, data),
+    deliver: (batchId: string, data: { latitude?: number; longitude?: number; retailerId?: string; notes?: string; image?: string | null } | FormData) =>
+        api.post(`/api/batches/${batchId}/deliver`, data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+        }),
 
     receive: (batchId: string, data: { latitude?: number; longitude?: number; notes?: string }) =>
         api.post(`/api/batches/${batchId}/receive`, data),
@@ -118,6 +124,13 @@ export const mediaAPI = {
 // Stats endpoint
 export const statsAPI = {
     get: () => api.get('/api/stats'),
+};
+
+// Government Dashboard endpoints
+export const govtAPI = {
+    getEnamPrices: () => api.get('/api/govt/enam/prices'),
+    verifyFssaiLicense: (number: string) => api.get(`/api/govt/fssai/license/${number}`),
+    getFssaiCompliance: () => api.get('/api/govt/fssai/compliance'),
 };
 
 // Health check

@@ -15,6 +15,9 @@ interface Profile {
     land?: string;
     crops?: string;
     verified?: boolean;
+    reliability_score?: number;
+    total_batches?: number;
+    successful_batches?: number;
     [key: string]: unknown;
 }
 
