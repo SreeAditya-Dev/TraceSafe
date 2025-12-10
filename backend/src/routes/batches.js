@@ -970,6 +970,141 @@ router.post('/:batchId/sell', authenticate, requireRole('retailer'), async (req,
     }
 });
 
+// Certify batch (Admin only)
+router.post('/:batchId/certify', authenticate, requireRole('admin'), async (req, res) => {
+    const client = await getClient();
+    try {
+        await client.query('BEGIN');
+        const { batchId } = req.params;
+
+        const batchResult = await client.query('SELECT * FROM batches WHERE batch_id = $1', [batchId]);
+
+        if (batchResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Batch not found' });
+        }
+
+        const batch = batchResult.rows[0];
+
+        // VALIDATION: Batch must be received or sold to be certified
+        if (batch.status !== 'received' && batch.status !== 'sold') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: 'Batch not eligible for certification',
+                message: 'Batch must be received by retailer or sold before certification'
+            });
+        }
+
+        // Call Blockchain
+        let blockchainTxId = null;
+        let certificateId = null;
+        try {
+            const fabricService = await tryConnectFabric('admin');
+            if (fabricService) {
+                try {
+                    const fabricResult = await fabricService.certifyBatch(batchId);
+                    blockchainTxId = fabricResult.txId;
+
+                    // Fetch the batch from chaincode to get the authoritative ID
+                    const chaincodeBatch = await fabricService.getBatch(batchId);
+                    certificateId = chaincodeBatch.certificateId;
+                    console.log(`✅ Batch ${batchId} certified on blockchain: ${certificateId}`);
+                } catch (fabricError) {
+                    // Check if already certified
+                    if (fabricError.message && (fabricError.message.includes('already certified') || fabricError.message.includes('already been certified'))) {
+                        console.log('⚠️ Batch already certified on blockchain. Syncing local DB...');
+                        const chaincodeBatch = await fabricService.getBatch(batchId);
+                        certificateId = chaincodeBatch.certificateId;
+                        blockchainTxId = 'SYNCED_FROM_BLOCKCHAIN';
+                    } else {
+                        throw fabricError;
+                    }
+                }
+            } else {
+                throw new Error('Fabric service not available');
+            }
+        } catch (fabricErr) {
+            await client.query('ROLLBACK');
+            console.error('Blockchain certification failed:', fabricErr);
+            return res.status(500).json({ error: 'Blockchain certification failed', details: fabricErr.message });
+        }
+
+        // Create journey event
+        await client.query(
+            `INSERT INTO journey_events (
+        batch_id, event_type, actor_type, actor_id, actor_name, notes, blockchain_tx_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [batch.id, 'certified', 'admin', req.user.id, 'TraceSafe Admin', `Batch Certified. ID: ${certificateId}`, blockchainTxId]
+        );
+
+        await client.query('COMMIT');
+
+        res.json({
+            message: 'Batch certified successfully (Synced)',
+            batch_id: batchId,
+            certificate_id: certificateId,
+            blockchain_tx_id: blockchainTxId
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Certification error:', err);
+        res.status(500).json({ error: 'Failed to certify batch', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Verify batch integrity (Admin only)
+router.get('/:batchId/verify', authenticate, requireRole('admin'), async (req, res) => {
+    const client = await getClient();
+    try {
+        const { batchId } = req.params;
+
+        // 1. Fetch local data
+        const batchResult = await client.query('SELECT * FROM batches WHERE batch_id = $1', [batchId]);
+
+        if (batchResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Batch not found' });
+        }
+
+        const batch = batchResult.rows[0];
+
+        // Check for certification event in journey to see if local DB thinks it's certified
+        const journeyResult = await client.query(
+            "SELECT * FROM journey_events WHERE batch_id = $1 AND event_type = 'certified'",
+            [batch.id]
+        );
+
+        const isCertifiedLocally = journeyResult.rows.length > 0;
+        const localCertificateId = isCertifiedLocally ? journeyResult.rows[0].notes.split('ID: ')[1] : null;
+
+        const localData = {
+            status: batch.status,
+            isCertified: isCertifiedLocally,
+            certificateId: localCertificateId
+        };
+
+        // 2. Call Blockchain Verification
+        const fabricService = await tryConnectFabric('admin');
+        if (!fabricService) {
+            return res.status(503).json({ error: 'Blockchain service unavailable' });
+        }
+
+        const verificationResult = await fabricService.verifyIntegrity(batchId, localData);
+
+        res.json({
+            batch_id: batchId,
+            ...verificationResult
+        });
+
+    } catch (err) {
+        console.error('Verification error:', err);
+        res.status(500).json({ error: 'Failed to verify batch', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // Get batch journey/history (public)
 router.get('/:batchId/journey', async (req, res) => {
     try {

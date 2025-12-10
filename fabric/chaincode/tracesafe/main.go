@@ -35,10 +35,12 @@ type Batch struct {
 	OriginLng    float64 `json:"originLng"`
 	OriginAddr   string  `json:"originAddress"`
 	Status       string  `json:"status"`
-	CurrentOwner string  `json:"currentOwner"`
-	CurrentOrg   string  `json:"currentOrg"`
-	CreatedAt    string  `json:"createdAt"`
-	UpdatedAt    string  `json:"updatedAt"`
+	CurrentOwner  string  `json:"currentOwner"`
+	CurrentOrg    string  `json:"currentOrg"`
+	IsCertified   bool    `json:"isCertified"`
+	CertificateID string  `json:"certificateId"`
+	CreatedAt     string  `json:"createdAt"`
+	UpdatedAt     string  `json:"updatedAt"`
 }
 
 // JourneyEvent represents a step in the supply chain journey
@@ -355,6 +357,50 @@ func (t *TraceSafeContract) RecordSale(ctx contractapi.TransactionContextInterfa
 	eventID := fmt.Sprintf("%s-sold-%d", batchID, time.Now().Unix())
 	err = t.recordEvent(ctx, eventID, batchID, "sold", retailerName, mspID,
 		0, 0, 0, 0, notes)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState(batchID, batchJSON)
+}
+
+// CertifyBatch certifies a batch and issues a certificate ID
+func (t *TraceSafeContract) CertifyBatch(ctx contractapi.TransactionContextInterface,
+	batchID string) error {
+
+	// Get submitter identity (must be Admin)
+	// In a real scenario, we'd check for a specific attribute or MSP
+	// For this demo, we'll allow any client from the Org to certify if they have access
+	// Ideally, check for specific admin role
+
+	batch, err := t.GetBatch(ctx, batchID)
+	if err != nil {
+		return err
+	}
+
+	if batch.IsCertified {
+		return fmt.Errorf("batch %s is already certified", batchID)
+	}
+
+	// Generate Certificate ID
+	timestamp := time.Now().Unix()
+	certID := fmt.Sprintf("CERT-%s-%d", batchID, timestamp)
+
+	batch.IsCertified = true
+	batch.CertificateID = certID
+	batch.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	batchJSON, err := json.Marshal(batch)
+	if err != nil {
+		return err
+	}
+
+	// Record certification event
+	eventID := fmt.Sprintf("%s-certified-%d", batchID, timestamp)
+	// We use "admin" as actor for now, could be passed in
+	mspID, _ := ctx.GetClientIdentity().GetMSPID()
+	err = t.recordEvent(ctx, eventID, batchID, "certified", "Admin", mspID,
+		0, 0, 0, 0, fmt.Sprintf("Batch certified. Certificate ID: %s", certID))
 	if err != nil {
 		return err
 	}

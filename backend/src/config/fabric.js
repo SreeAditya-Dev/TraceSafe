@@ -309,6 +309,78 @@ export class FabricService {
     }
 
     /**
+     * Certify a batch on the blockchain
+     */
+    async certifyBatch(batchId) {
+        if (!this.connected) {
+            throw new Error('Not connected to Fabric network');
+        }
+
+        try {
+            const transaction = this.contract.createTransaction('CertifyBatch');
+            const result = await transaction.submit(batchId);
+
+            return {
+                success: true,
+                txId: transaction.getTransactionId(),
+                result: result.toString()
+            };
+        } catch (error) {
+            console.error('Failed to certify batch on blockchain:', error);
+            throw error;
+        }
+    }
+
+
+
+    /**
+     * Verify integrity of local data against blockchain
+     */
+    async verifyIntegrity(batchId, localBatchData) {
+        if (!this.connected) {
+            throw new Error('Not connected to Fabric network');
+        }
+
+        try {
+            // Fetch authoritative data from blockchain
+            const chaincodeBatch = await this.getBatch(batchId);
+
+            // Compare critical fields
+            const discrepancies = [];
+
+            // 1. Check Status
+            if (chaincodeBatch.status !== localBatchData.status) {
+                discrepancies.push(`Status mismatch: Blockchain has '${chaincodeBatch.status}', DB has '${localBatchData.status}'`);
+            }
+
+            // 2. Check Certification
+            const chaincodeCertified = chaincodeBatch.isCertified || false;
+            const localCertified = localBatchData.isCertified || false;
+
+            if (chaincodeCertified !== localCertified) {
+                discrepancies.push(`Certification mismatch: Blockchain has '${chaincodeCertified}', DB has '${localCertified}'`);
+            }
+
+            // 3. Check Certificate ID
+            const chaincodeCertId = chaincodeBatch.certificateId || null;
+            const localCertId = localBatchData.certificateId || null;
+
+            if (chaincodeCertId !== localCertId) {
+                discrepancies.push(`Certificate ID mismatch: Blockchain has '${chaincodeCertId}', DB has '${localCertId}'`);
+            }
+
+            return {
+                verified: discrepancies.length === 0,
+                discrepancies,
+                blockchainData: chaincodeBatch
+            };
+        } catch (error) {
+            console.error('Failed to verify integrity:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Get batch from the blockchain
      */
     async getBatch(batchId) {

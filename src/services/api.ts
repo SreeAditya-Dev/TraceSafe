@@ -106,6 +106,12 @@ export const batchAPI = {
     sell: (batchId: string, data: { notes?: string }) =>
         api.post(`/api/batches/${batchId}/sell`, data),
 
+    certify: (batchId: string) =>
+        api.post(`/api/batches/${batchId}/certify`),
+
+    verify: (batchId: string) =>
+        api.get(`/api/batches/${batchId}/verify`),
+
     getJourney: (batchId: string) =>
         api.get(`/api/batches/${batchId}/journey`),
 

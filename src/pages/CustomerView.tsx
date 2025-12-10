@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-    Leaf, Truck, Store, ShoppingCart, MapPin, Calendar, User, Package, Clock, CheckCircle, AlertTriangle, Share2, Shield, ArrowLeft, Box, Thermometer, Droplets
+    Leaf, Truck, Store, ShoppingCart, MapPin, Calendar, User, Package, Clock, CheckCircle, AlertTriangle, Share2, Shield, ArrowLeft, Box, Thermometer, Droplets, Award
 } from 'lucide-react';
 import { RouteMap } from '@/components/RouteMap';
 
@@ -256,6 +256,27 @@ const CustomerView: React.FC = () => {
                             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
                                 <CheckCircle className="h-5 w-5 text-green-600" />
                                 <span className="text-green-800 font-medium">Verified via AgriStack Registry</span>
+                            </div>
+                        )}
+
+                        {/* Smart Certification Badge */}
+                        {data.journey.some((e: any) => e.event_type === 'certified') && (
+                            <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-blue-100 p-2 rounded-full">
+                                        <Award className="h-8 w-8 text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-blue-900">TraceSafe Certified</h3>
+                                        <p className="text-sm text-blue-700">Verified Safe & Authentic</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <Badge className="bg-blue-600 text-white mb-1">Verified</Badge>
+                                    <p className="text-xs font-mono text-blue-800">
+                                        {data.journey.find((e: any) => e.event_type === 'certified')?.notes.split('ID: ')[1] || 'CERT-VERIFIED'}
+                                    </p>
+                                </div>
                             </div>
                         )}
 

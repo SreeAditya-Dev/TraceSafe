@@ -122,7 +122,7 @@ CREATE TABLE batches (
 CREATE TABLE journey_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     batch_id UUID REFERENCES batches(id) ON DELETE CASCADE,
-    event_type VARCHAR(50) NOT NULL CHECK (event_type IN ('created', 'pickup', 'transit_update', 'delivery', 'received', 'sold')),
+    event_type VARCHAR(50) NOT NULL CHECK (event_type IN ('created', 'pickup', 'transit_update', 'delivery', 'received', 'sold', 'certified')),
     actor_type VARCHAR(50) NOT NULL,
     actor_id UUID NOT NULL,
     actor_name VARCHAR(255),
