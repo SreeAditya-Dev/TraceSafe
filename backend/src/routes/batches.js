@@ -6,6 +6,9 @@ import { query, getClient } from '../config/database.js';
 import { authenticate, requireRole, optionalAuth } from '../middleware/auth.js';
 import { uploadFile } from '../config/minio.js';
 import { getFabricService } from '../config/fabric.js';
+import { getIoTDefaults, getCropTypeEncoded } from '../config/iotConfig.js';
+import { getLocationTemperature } from '../services/weatherService.js';
+import { predictSpoilageRisk } from '../services/mlService.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -103,7 +106,7 @@ router.post('/', authenticate, requireRole('farmer'), upload.any(), async (req, 
     const client = await getClient();
     try {
         await client.query('BEGIN');
-        const { crop, variety, quantity, unit, harvestDate, latitude, longitude, address } = req.body;
+        const { crop, variety, quantity, unit, harvestDate, latitude, longitude, address, fssaiLicense } = req.body;
 
         if (!crop || !quantity) {
             await client.query('ROLLBACK');
@@ -149,21 +152,29 @@ router.post('/', authenticate, requireRole('farmer'), upload.any(), async (req, 
         const qrBuffer = Buffer.from(qrCodeDataUrl.split(',')[1], 'base64');
         const { url: qrUrl } = await uploadFile(`qr-${batchId}.png`, qrBuffer, 'image/png');
 
-        // Create batch
+        // Get IoT defaults for this crop type
+        const iotDefaults = getIoTDefaults(crop);
+        const cropTypeEncoded = getCropTypeEncoded(crop);
+        console.log(`🌡️ IoT Defaults for ${crop}: crate=${iotDefaults.crate_temp}°C, reefer=${iotDefaults.reefer_temp}°C, humidity=${iotDefaults.humidity}%`);
+
+        // Create batch with IoT defaults
         const result = await client.query(
             `INSERT INTO batches (
         batch_id, crop, variety, quantity, unit, harvest_date, farmer_id,
         current_owner_type, current_owner_id, status,
         origin_latitude, origin_longitude, origin_address,
-        qr_code_url, image_urls
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        qr_code_url, image_urls,
+        crate_temp, reefer_temp, humidity, crop_type_encoded, fssai_license
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *`,
             [
                 batchId, crop, variety || null, parseFloat(quantity), unit || 'kg',
                 harvestDate || new Date(), farmer.id,
                 'farmer', farmer.id, 'created',
                 parseFloat(latitude) || null, parseFloat(longitude) || null, address || null,
-                qrUrl, imageUrls.length > 0 ? imageUrls : null
+                qrUrl, imageUrls.length > 0 ? imageUrls : null,
+                iotDefaults.crate_temp, iotDefaults.reefer_temp, iotDefaults.humidity, cropTypeEncoded,
+                fssaiLicense || farmer.fssai_license || null
             ]
         );
 
@@ -247,6 +258,26 @@ router.post('/', authenticate, requireRole('farmer'), upload.any(), async (req, 
     }
 });
 
+// Get all retailers (for driver delivery dropdown)
+router.get('/retailers', authenticate, requireRole('driver', 'admin'), async (req, res) => {
+    try {
+        const result = await query(
+            `SELECT r.id, r.name, r.shop_name, r.phone, r.address, r.latitude, r.longitude
+             FROM retailers r
+             JOIN users u ON r.user_id = u.id
+             ORDER BY r.name ASC`
+        );
+
+        res.json({
+            retailers: result.rows,
+            count: result.rows.length
+        });
+    } catch (err) {
+        console.error('Get retailers error:', err);
+        res.status(500).json({ error: 'Failed to fetch retailers', details: err.message });
+    }
+});
+
 // Get all batches (filtered by role)
 router.get('/', authenticate, async (req, res) => {
     try {
@@ -321,7 +352,7 @@ router.get('/:batchId', optionalAuth, async (req, res) => {
         const { batchId } = req.params;
 
         const result = await query(
-            `SELECT b.*, f.name as farmer_name, f.agristack_id, f.district, f.state
+            `SELECT b.*, f.name as farmer_name, f.agristack_id, f.district, f.state, f.fssai_license as farmer_license
        FROM batches b
        LEFT JOIN farmers f ON b.farmer_id = f.id
        WHERE b.batch_id = $1`,
@@ -479,15 +510,28 @@ router.post('/:batchId/pickup', authenticate, requireRole('driver'), upload.any(
 
         const batch = batchCheck.rows[0];
 
-        // Update batch status
+        // Fetch location temperature from OpenWeather API
+        let locationTemp = batch.location_temp || 22.0;
+        try {
+            if (latitude && longitude) {
+                locationTemp = await getLocationTemperature(parseFloat(latitude), parseFloat(longitude));
+                console.log(`🌡️ Location temp for pickup: ${locationTemp}°C`);
+            }
+        } catch (weatherErr) {
+            console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', weatherErr.message);
+        }
+
+        // Update batch status with transit_start_time and location_temp
         const batchResult = await client.query(
             `UPDATE batches
             SET status = 'in_transit',
                 current_owner_type = 'driver',
-                current_owner_id = $1
+                current_owner_id = $1,
+                transit_start_time = NOW(),
+                location_temp = $3
             WHERE batch_id = $2
             RETURNING *`,
-            [driver.id, batchId]
+            [driver.id, batchId, locationTemp]
         );
 
         // Create transfer record
@@ -519,12 +563,15 @@ router.post('/:batchId/pickup', authenticate, requireRole('driver'), upload.any(
         try {
             const fabricService = await tryConnectFabric('driver');
             if (fabricService) {
+                // Append IoT data to notes for blockchain immutability
+                const blockchainNotes = `${notes || ''} | IoT: Location Temp ${locationTemp}°C`.trim();
+
                 const fabricResult = await fabricService.recordPickup(
                     batchId,
                     driver.name,
                     parseFloat(latitude) || 0,
                     parseFloat(longitude) || 0,
-                    notes || ''
+                    blockchainNotes
                 );
                 blockchainTxId = fabricResult.txId;
                 console.log(`✅ Pickup ${batchId} recorded on blockchain: ${blockchainTxId}`);
@@ -563,6 +610,23 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
         const { batchId } = req.params;
         const { latitude, longitude, retailerId, notes } = req.body;
 
+        // VALIDATION: Retailer must be specified for delivery
+        if (!retailerId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: 'Retailer ID required',
+                message: 'You must specify which retailer you are delivering to'
+            });
+        }
+
+        // Validate retailer exists
+        const retailerCheck = await client.query('SELECT * FROM retailers WHERE id = $1', [retailerId]);
+        if (retailerCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Retailer not found' });
+        }
+        const targetRetailer = retailerCheck.rows[0];
+
         const batchResult = await client.query('SELECT * FROM batches WHERE batch_id = $1', [batchId]);
 
         if (batchResult.rows.length === 0) {
@@ -580,6 +644,12 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
         const driverResult = await client.query('SELECT * FROM drivers WHERE user_id = $1', [req.user.id]);
         const driver = driverResult.rows[0];
 
+        // VALIDATION: Driver must be the current owner
+        if (batch.current_owner_type !== 'driver' || batch.current_owner_id !== driver.id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'You are not the current owner of this batch' });
+        }
+
         // Upload image if present
         let imageUrls = [];
         if (req.file) {
@@ -587,10 +657,26 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
             imageUrls.push(url);
         }
 
-        // Update batch
+        // Calculate transit duration in hours
+        let transitDuration = null;
+        if (batch.transit_start_time) {
+            const startTime = new Date(batch.transit_start_time);
+            const endTime = new Date();
+            transitDuration = Math.round((endTime - startTime) / (1000 * 60 * 60)); // hours
+            console.log(`⏱️ Transit duration for ${batchId}: ${transitDuration} hours`);
+        }
+
+        // Update batch with delivery info, pending retailer, and delivery location
         await client.query(
-            `UPDATE batches SET status = 'delivered' WHERE id = $1`,
-            [batch.id]
+            `UPDATE batches SET 
+                status = 'delivered', 
+                transit_end_time = NOW(),
+                transit_duration = $2,
+                pending_retailer_id = $3,
+                delivery_latitude = $4,
+                delivery_longitude = $5
+            WHERE id = $1`,
+            [batch.id, transitDuration, retailerId, parseFloat(latitude) || null, parseFloat(longitude) || null]
         );
 
         // Create journey event
@@ -609,13 +695,16 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
         try {
             const fabricService = await tryConnectFabric('driver');
             if (fabricService) {
+                // Append IoT data to notes for blockchain immutability
+                const blockchainNotes = `${notes || ''} | IoT: Transit Duration ${transitDuration || 0}h`.trim();
+
                 const fabricResult = await fabricService.recordDelivery(
                     batchId,
                     driver.name,
                     '',  // retailerName not available here
                     parseFloat(latitude) || 0,
                     parseFloat(longitude) || 0,
-                    notes || ''
+                    blockchainNotes
                 );
                 blockchainTxId = fabricResult.txId;
                 console.log(`✅ Delivery ${batchId} recorded on blockchain: ${blockchainTxId}`);
@@ -624,6 +713,9 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
             console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', fabricErr.message);
         }
 
+        // CRITICAL: Commit the transaction
+        await client.query('COMMIT');
+
         res.json({
             message: 'Batch delivered successfully',
             batch_id: batchId,
@@ -631,13 +723,21 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
             blockchain_tx_id: blockchainTxId,
         });
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Deliver error:', err);
         res.status(500).json({ error: 'Failed to deliver batch', details: err.message });
+    } finally {
+        client.release();
     }
 });
 
 // Receive batch (Retailer receives)
-router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (req, res) => {
+router.post('/:batchId/receive', authenticate, requireRole('retailer'), upload.any(), async (req, res) => {
+    // Handle file from upload.any()
+    if (req.files && req.files.length > 0) {
+        const imageFile = req.files.find(f => f.fieldname === 'image');
+        if (imageFile) req.file = imageFile;
+    }
     const client = await getClient();
     try {
         await client.query('BEGIN');
@@ -653,9 +753,14 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
 
         const batch = batchResult.rows[0];
 
-        if (batch.status !== 'delivered' && batch.status !== 'in_transit') {
+        // VALIDATION: Batch must be in 'delivered' status (driver must deliver first)
+        if (batch.status !== 'delivered') {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Batch cannot be received in current status', status: batch.status });
+            return res.status(400).json({
+                error: 'Batch not delivered yet',
+                message: 'The driver must mark this batch as delivered before you can receive it',
+                current_status: batch.status
+            });
         }
 
         // Get or create retailer profile
@@ -669,6 +774,22 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
         }
 
         const retailer = retailerResult.rows[0];
+
+        // VALIDATION: Only the designated retailer can receive this batch
+        if (batch.pending_retailer_id && batch.pending_retailer_id !== retailer.id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({
+                error: 'Not authorized to receive this batch',
+                message: 'This batch was delivered to a different retailer'
+            });
+        }
+
+        // Upload image if present
+        let imageUrls = [];
+        if (req.file) {
+            const { url } = await uploadFile(req.file.originalname, req.file.buffer, req.file.mimetype);
+            imageUrls.push(url);
+        }
 
         // Update batch
         await client.query(
@@ -688,33 +809,73 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
         await client.query(
             `INSERT INTO journey_events (
         batch_id, event_type, actor_type, actor_id, actor_name,
-        latitude, longitude, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        latitude, longitude, notes, image_urls
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [batch.id, 'received', 'retailer', retailer.id, retailer.name,
             parseFloat(latitude) || null, parseFloat(longitude) || null,
-            notes || `Received by retailer ${retailer.name}`]
+            notes || `Received by retailer ${retailer.name}`, imageUrls]
         );
 
         // Update farmer score (successful delivery)
         await updateFarmerScore(client, batch.farmer_id);
 
+        // Call ML API to predict spoilage risk
+        let spoilageRisk = null;
+        let spoilageProbability = null;
+        try {
+            const mlPrediction = await predictSpoilageRisk({
+                crate_temp: batch.crate_temp,
+                reefer_temp: batch.reefer_temp,
+                humidity: batch.humidity,
+                location_temp: batch.location_temp,
+                transit_duration: batch.transit_duration,
+                crop_type_encoded: batch.crop_type_encoded
+            });
+
+            if (mlPrediction) {
+                spoilageRisk = mlPrediction.prediction; // "High Risk" or "Low Risk"
+                spoilageProbability = mlPrediction.probabilities['High Risk'];
+                console.log(`🔬 ML Spoilage Prediction for ${batchId}: ${spoilageRisk} (${(spoilageProbability * 100).toFixed(1)}%)`);
+
+                // Update batch with spoilage prediction
+                await client.query(
+                    'UPDATE batches SET spoilage_risk = $1, spoilage_probability = $2 WHERE id = $3',
+                    [spoilageRisk, spoilageProbability, batch.id]
+                );
+            }
+        } catch (mlErr) {
+            console.log('⚠️ ML prediction failed (continuing without it):', mlErr.message);
+        }
+
         // Record on blockchain
         let blockchainTxId = null;
-        try {
-            const fabricService = await tryConnectFabric('retailer');
-            if (fabricService) {
-                const fabricResult = await fabricService.recordReceipt(
-                    batchId,
-                    retailer.name,
-                    parseFloat(latitude) || 0,
-                    parseFloat(longitude) || 0,
-                    notes || ''
-                );
-                blockchainTxId = fabricResult.txId;
-                console.log(`✅ Receipt ${batchId} recorded on blockchain: ${blockchainTxId}`);
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                const fabricService = await tryConnectFabric('retailer');
+                if (fabricService) {
+                    const fabricResult = await fabricService.recordReceipt(
+                        batchId,
+                        retailer.name,
+                        parseFloat(latitude) || 0,
+                        parseFloat(longitude) || 0,
+                        notes || ''
+                    );
+                    blockchainTxId = fabricResult.txId;
+                    console.log(`✅ Receipt ${batchId} recorded on blockchain: ${blockchainTxId}`);
+                    break; // Success, exit loop
+                } else {
+                    console.log('⚠️ Fabric service not available, retrying...');
+                }
+            } catch (fabricErr) {
+                console.log(`⚠️ Blockchain write failed (attempt ${4 - retries}/3):`, fabricErr.message);
+                if (retries === 1) {
+                    console.log('❌ Giving up on blockchain write after 3 attempts');
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+                }
             }
-        } catch (fabricErr) {
-            console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', fabricErr.message);
+            retries--;
         }
 
         await client.query('COMMIT');
@@ -724,6 +885,8 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
             batch_id: batchId,
             status: 'received',
             blockchain_tx_id: blockchainTxId,
+            spoilage_risk: spoilageRisk,
+            spoilage_probability: spoilageProbability
         });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -807,6 +970,141 @@ router.post('/:batchId/sell', authenticate, requireRole('retailer'), async (req,
     }
 });
 
+// Certify batch (Admin only)
+router.post('/:batchId/certify', authenticate, requireRole('admin'), async (req, res) => {
+    const client = await getClient();
+    try {
+        await client.query('BEGIN');
+        const { batchId } = req.params;
+
+        const batchResult = await client.query('SELECT * FROM batches WHERE batch_id = $1', [batchId]);
+
+        if (batchResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Batch not found' });
+        }
+
+        const batch = batchResult.rows[0];
+
+        // VALIDATION: Batch must be received or sold to be certified
+        if (batch.status !== 'received' && batch.status !== 'sold') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: 'Batch not eligible for certification',
+                message: 'Batch must be received by retailer or sold before certification'
+            });
+        }
+
+        // Call Blockchain
+        let blockchainTxId = null;
+        let certificateId = null;
+        try {
+            const fabricService = await tryConnectFabric('admin');
+            if (fabricService) {
+                try {
+                    const fabricResult = await fabricService.certifyBatch(batchId);
+                    blockchainTxId = fabricResult.txId;
+
+                    // Fetch the batch from chaincode to get the authoritative ID
+                    const chaincodeBatch = await fabricService.getBatch(batchId);
+                    certificateId = chaincodeBatch.certificateId;
+                    console.log(`✅ Batch ${batchId} certified on blockchain: ${certificateId}`);
+                } catch (fabricError) {
+                    // Check if already certified
+                    if (fabricError.message && (fabricError.message.includes('already certified') || fabricError.message.includes('already been certified'))) {
+                        console.log('⚠️ Batch already certified on blockchain. Syncing local DB...');
+                        const chaincodeBatch = await fabricService.getBatch(batchId);
+                        certificateId = chaincodeBatch.certificateId;
+                        blockchainTxId = 'SYNCED_FROM_BLOCKCHAIN';
+                    } else {
+                        throw fabricError;
+                    }
+                }
+            } else {
+                throw new Error('Fabric service not available');
+            }
+        } catch (fabricErr) {
+            await client.query('ROLLBACK');
+            console.error('Blockchain certification failed:', fabricErr);
+            return res.status(500).json({ error: 'Blockchain certification failed', details: fabricErr.message });
+        }
+
+        // Create journey event
+        await client.query(
+            `INSERT INTO journey_events (
+        batch_id, event_type, actor_type, actor_id, actor_name, notes, blockchain_tx_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [batch.id, 'certified', 'admin', req.user.id, 'TraceSafe Admin', `Batch Certified. ID: ${certificateId}`, blockchainTxId]
+        );
+
+        await client.query('COMMIT');
+
+        res.json({
+            message: 'Batch certified successfully (Synced)',
+            batch_id: batchId,
+            certificate_id: certificateId,
+            blockchain_tx_id: blockchainTxId
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Certification error:', err);
+        res.status(500).json({ error: 'Failed to certify batch', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Verify batch integrity (Admin only)
+router.get('/:batchId/verify', authenticate, requireRole('admin'), async (req, res) => {
+    const client = await getClient();
+    try {
+        const { batchId } = req.params;
+
+        // 1. Fetch local data
+        const batchResult = await client.query('SELECT * FROM batches WHERE batch_id = $1', [batchId]);
+
+        if (batchResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Batch not found' });
+        }
+
+        const batch = batchResult.rows[0];
+
+        // Check for certification event in journey to see if local DB thinks it's certified
+        const journeyResult = await client.query(
+            "SELECT * FROM journey_events WHERE batch_id = $1 AND event_type = 'certified'",
+            [batch.id]
+        );
+
+        const isCertifiedLocally = journeyResult.rows.length > 0;
+        const localCertificateId = isCertifiedLocally ? journeyResult.rows[0].notes.split('ID: ')[1] : null;
+
+        const localData = {
+            status: batch.status,
+            isCertified: isCertifiedLocally,
+            certificateId: localCertificateId
+        };
+
+        // 2. Call Blockchain Verification
+        const fabricService = await tryConnectFabric('admin');
+        if (!fabricService) {
+            return res.status(503).json({ error: 'Blockchain service unavailable' });
+        }
+
+        const verificationResult = await fabricService.verifyIntegrity(batchId, localData);
+
+        res.json({
+            batch_id: batchId,
+            ...verificationResult
+        });
+
+    } catch (err) {
+        console.error('Verification error:', err);
+        res.status(500).json({ error: 'Failed to verify batch', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // Get batch journey/history (public)
 router.get('/:batchId/journey', async (req, res) => {
     try {
@@ -841,6 +1139,7 @@ router.get('/:batchId/journey', async (req, res) => {
         res.json({
             batch: {
                 id: batch.batch_id,
+                batch_id: batch.batch_id,
                 crop: batch.crop,
                 variety: batch.variety,
                 quantity: `${batch.quantity} ${batch.unit}`,
@@ -853,6 +1152,10 @@ router.get('/:batchId/journey', async (req, res) => {
                 },
                 qr_code_url: batch.qr_code_url,
                 created_at: batch.created_at,
+                spoilage_risk: batch.spoilage_risk,
+                spoilage_probability: batch.spoilage_probability,
+                fssai_license: batch.fssai_license,
+                farmer_license: batch.farmer_license,
             },
             farmer: {
                 name: batch.farmer_name,
@@ -864,6 +1167,7 @@ router.get('/:batchId/journey', async (req, res) => {
                 event_type: event.event_type,
                 actor: event.actor_name,
                 actor_type: event.actor_type,
+                actor_name: event.actor_name,
                 location: {
                     latitude: event.latitude,
                     longitude: event.longitude,
@@ -874,7 +1178,10 @@ router.get('/:batchId/journey', async (req, res) => {
                     humidity: event.humidity,
                 },
                 notes: event.notes,
+                image_urls: event.image_urls,
+                blockchain_tx_id: event.blockchain_tx_id,
                 timestamp: event.created_at,
+                created_at: event.created_at,
             })),
             transfers: transfersResult.rows,
         });

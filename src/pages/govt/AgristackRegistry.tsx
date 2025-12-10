@@ -33,7 +33,7 @@ const AgristackRegistry = () => {
     try {
       const [statsRes, farmersRes] = await Promise.all([
         agristackAPI.getStats(),
-        agristackAPI.getFarmers({ limit: 10 })
+        agristackAPI.getFarmers({ limit: 50 })
       ]);
       setStats(statsRes.data);
       setFarmersList(farmersRes.data.farmers);

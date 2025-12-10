@@ -22,9 +22,12 @@ const GovtSidebar = () => {
 
   return (
     <aside className="w-64 min-h-screen bg-sidebar border-r border-sidebar-border">
-      <div className="p-4 border-b border-sidebar-border bg-primary">
-        <h1 className="text-lg font-semibold text-primary-foreground">TraceSafe</h1>
-        <p className="text-xs text-primary-foreground/80">Admin Dashboard</p>
+      <div className="p-4 border-b border-sidebar-border bg-primary flex items-center gap-3">
+        <img src="/android-chrome-192x192.png" alt="TraceSafe Logo" className="h-10 w-10 bg-white rounded-full p-1" />
+        <div>
+          <h1 className="text-lg font-semibold text-primary-foreground">TraceSafe</h1>
+          <p className="text-xs text-primary-foreground/80">Admin Dashboard</p>
+        </div>
       </div>
       <nav className="p-0">
         {menuItems.map((section, sectionIndex) => (
@@ -41,11 +44,10 @@ const GovtSidebar = () => {
                   <li key={itemIndex} className="border-b border-sidebar-border">
                     <Link
                       to={item.href}
-                      className={`block px-4 py-3 text-sm no-underline ${
-                        isActive
+                      className={`block px-4 py-3 text-sm no-underline ${isActive
                           ? "bg-sidebar-accent text-sidebar-primary font-medium border-l-4 border-l-primary"
                           : "text-sidebar-foreground hover:bg-sidebar-accent"
-                      }`}
+                        }`}
                     >
                       {item.label}
                     </Link>

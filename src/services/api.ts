@@ -39,11 +39,17 @@ export const authAPI = {
     login: (data: { email: string; password: string }) =>
         api.post('/api/auth/login', data),
 
+    loginWithAgriStack: (data: { agristackId: string }) =>
+        api.post('/api/auth/agristack-login', data),
+
     quickLogin: (data: { role: string; name?: string }) =>
         api.post('/api/auth/quick-login', data),
 
     getProfile: () =>
         api.get('/api/auth/me'),
+
+    updateProfile: (data: any) =>
+        api.put('/api/auth/profile', data),
 };
 
 // AgriStack endpoints
@@ -92,14 +98,25 @@ export const batchAPI = {
             headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
         }),
 
-    receive: (batchId: string, data: { latitude?: number; longitude?: number; notes?: string }) =>
-        api.post(`/api/batches/${batchId}/receive`, data),
+    receive: (batchId: string, data: { latitude?: number; longitude?: number; notes?: string; image?: string | null } | FormData) =>
+        api.post(`/api/batches/${batchId}/receive`, data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+        }),
 
     sell: (batchId: string, data: { notes?: string }) =>
         api.post(`/api/batches/${batchId}/sell`, data),
 
+    certify: (batchId: string) =>
+        api.post(`/api/batches/${batchId}/certify`),
+
+    verify: (batchId: string) =>
+        api.get(`/api/batches/${batchId}/verify`),
+
     getJourney: (batchId: string) =>
         api.get(`/api/batches/${batchId}/journey`),
+
+    getRetailers: () =>
+        api.get('/api/batches/retailers'),
 };
 
 // Media endpoints

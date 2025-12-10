@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-    Leaf, Truck, Store, ShoppingCart, MapPin,
-    Thermometer, Droplets, CheckCircle, Clock, Share2, ArrowLeft, Box
+    Leaf, Truck, Store, ShoppingCart, MapPin, Calendar, User, Package, Clock, CheckCircle, AlertTriangle, Share2, Shield, ArrowLeft, Box, Thermometer, Droplets, Award
 } from 'lucide-react';
 import { RouteMap } from '@/components/RouteMap';
 
@@ -43,6 +42,10 @@ interface BatchJourney {
         qr_code_url: string;
         created_at: string;
         blockchain_tx_id?: string;
+        spoilage_risk?: string;
+        spoilage_probability?: number;
+        fssai_license?: string;
+        farmer_license?: string;
     };
     farmer: {
         name: string;
@@ -197,7 +200,7 @@ const CustomerView: React.FC = () => {
                 <div className="max-w-4xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <Leaf className="h-6 w-6 text-green-600" />
+                            <img src="/android-chrome-192x192.png" alt="TraceSafe Logo" className="h-8 w-8" />
                             <span className="font-bold text-xl">TraceSafe</span>
                         </div>
                         <Button variant="outline" size="sm" onClick={handleShare}>
@@ -256,6 +259,45 @@ const CustomerView: React.FC = () => {
                             </div>
                         )}
 
+                        {/* Smart Certification Badge */}
+                        {data.journey.some((e: any) => e.event_type === 'certified') && (
+                            <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-blue-100 p-2 rounded-full">
+                                        <Award className="h-8 w-8 text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-blue-900">TraceSafe Certified</h3>
+                                        <p className="text-sm text-blue-700">Verified Safe & Authentic</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <Badge className="bg-blue-600 text-white mb-1">Verified</Badge>
+                                    <p className="text-xs font-mono text-blue-800">
+                                        {data.journey.find((e: any) => e.event_type === 'certified')?.notes.split('ID: ')[1] || 'CERT-VERIFIED'}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Additional Batch Details (Origin Address, FSSAI) */}
+                        {(data.batch.origin.address || data.batch.fssai_license || data.batch.farmer_license) && (
+                            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                                {data.batch.origin.address && (
+                                    <div className="flex items-center gap-2 text-gray-600">
+                                        <MapPin className="h-4 w-4" />
+                                        <span>{data.batch.origin.address || 'Location not available'}</span>
+                                    </div>
+                                )}
+                                {(data.batch.fssai_license || data.batch.farmer_license) && (
+                                    <div className="flex items-center gap-2 text-gray-600">
+                                        <Shield className="h-4 w-4 text-blue-600" />
+                                        <span>FSSAI Lic: {data.batch.fssai_license || data.batch.farmer_license}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Blockchain Verification */}
                         {(data.batch.blockchain_tx_id || data.blockchain) && (
                             <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
@@ -282,6 +324,57 @@ const CustomerView: React.FC = () => {
                                 </div>
                                 <p className="text-xs text-purple-500 mt-2">
                                     This batch is immutably recorded on a permissioned enterprise blockchain.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* ML Spoilage Risk Prediction */}
+                        {data.batch.spoilage_risk && (
+                            <div className={`mt-4 p-4 border rounded-lg ${data.batch.spoilage_risk === 'High Risk'
+                                ? 'bg-red-50 border-red-200'
+                                : 'bg-green-50 border-green-200'
+                                }`}>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Thermometer className={`h-5 w-5 ${data.batch.spoilage_risk === 'High Risk'
+                                        ? 'text-red-600'
+                                        : 'text-green-600'
+                                        }`} />
+                                    <span className={`font-semibold ${data.batch.spoilage_risk === 'High Risk'
+                                        ? 'text-red-800'
+                                        : 'text-green-800'
+                                        }`}>FSSAI Risk Assessment</span>
+                                    <Badge className={`${data.batch.spoilage_risk === 'High Risk'
+                                        ? 'bg-red-600'
+                                        : 'bg-green-600'
+                                        } text-white text-xs`}>
+                                        {data.batch.spoilage_risk}
+                                    </Badge>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                        <p className={data.batch.spoilage_risk === 'High Risk' ? 'text-red-600' : 'text-green-600'}>
+                                            Risk Level
+                                        </p>
+                                        <p className="font-mono text-xs">{data.batch.spoilage_risk}</p>
+                                    </div>
+                                    <div>
+                                        <p className={data.batch.spoilage_risk === 'High Risk' ? 'text-red-600' : 'text-green-600'}>
+                                            Confidence
+                                        </p>
+                                        <p className="font-mono text-xs">
+                                            {data.batch.spoilage_probability
+                                                ? `${(data.batch.spoilage_probability * 100).toFixed(1)}%`
+                                                : 'N/A'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p className={`text-xs mt-2 ${data.batch.spoilage_risk === 'High Risk'
+                                    ? 'text-red-500'
+                                    : 'text-green-500'
+                                    }`}>
+                                    {data.batch.spoilage_risk === 'High Risk'
+                                        ? '⚠️ This batch shows elevated spoilage risk based on cold chain monitoring data. Consume with caution.'
+                                        : '✓ This batch was maintained under optimal cold chain conditions.'}
                                 </p>
                             </div>
                         )}

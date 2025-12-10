@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
     Truck, QrCode, MapPin, Package, Thermometer,
-    Droplets, LogOut, Camera, Send, Navigation
+    Droplets, LogOut, Camera, Send, Navigation, User
 } from 'lucide-react';
 import {
     Dialog,
@@ -36,6 +36,14 @@ interface Batch {
     created_at: string;
 }
 
+interface Retailer {
+    id: string;
+    name: string;
+    shop_name: string;
+    phone: string;
+    address: string;
+}
+
 const TruckDashboard: React.FC = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
@@ -43,6 +51,8 @@ const TruckDashboard: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     const [batches, setBatches] = useState<Batch[]>([]);
+    const [retailers, setRetailers] = useState<Retailer[]>([]);
+    const [selectedRetailerId, setSelectedRetailerId] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [showScanner, setShowScanner] = useState(false);
     const [scannedBatch, setScannedBatch] = useState<Batch | null>(null);
@@ -65,10 +75,14 @@ const TruckDashboard: React.FC = () => {
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const response = await batchAPI.getAll({ status: 'in_transit' });
-            setBatches(response.data.batches || []);
+            const [batchesRes, retailersRes] = await Promise.all([
+                batchAPI.getAll({ status: 'in_transit' }),
+                batchAPI.getRetailers()
+            ]);
+            setBatches(batchesRes.data.batches || []);
+            setRetailers(retailersRes.data.retailers || []);
         } catch (error) {
-            console.error('Failed to load batches:', error);
+            console.error('Failed to load data:', error);
         } finally {
             setIsLoading(false);
         }
@@ -172,11 +186,21 @@ const TruckDashboard: React.FC = () => {
     const handleDeliver = async () => {
         if (!scannedBatch) return;
 
+        if (!selectedRetailerId) {
+            toast({
+                title: 'Select Retailer',
+                description: 'You must select a retailer to deliver to',
+                variant: 'destructive',
+            });
+            return;
+        }
+
         setIsUpdating(true);
         try {
             const formData = new FormData();
             formData.append('latitude', location.lat || '0');
             formData.append('longitude', location.lng || '0');
+            formData.append('retailerId', selectedRetailerId);
             formData.append('notes', 'Delivered to destination');
 
             if (evidenceImage) {
@@ -194,6 +218,7 @@ const TruckDashboard: React.FC = () => {
 
             loadData();
             setScannedBatch(null);
+            setSelectedRetailerId('');
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Delivery failed';
             toast({
@@ -242,15 +267,20 @@ const TruckDashboard: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        {location && (
-                            <Badge className="bg-blue-800">
-                                <Navigation className="h-3 w-3 mr-1" />
-                                GPS Active
-                            </Badge>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-blue-700">
-                            <LogOut className="h-4 w-4 mr-2" />
-                            Logout
+                        <Button variant="ghost" onClick={() => navigate('/profile')}>
+                            My Profile
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <div className="bg-blue-100 p-2 rounded-full">
+                                <User className="h-6 w-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="font-semibold">{user?.name}</p>
+                                <p className="text-xs text-gray-500">Driver</p>
+                            </div>
+                        </div>
+                        <Button variant="outline" size="icon" onClick={logout}>
+                            <LogOut className="h-4 w-4" />
                         </Button>
                     </div>
                 </div>
@@ -342,60 +372,55 @@ const TruckDashboard: React.FC = () => {
                             {scannedBatch.status === 'in_transit' && (
                                 <>
                                     <div className="border-t pt-4">
-                                        <h4 className="font-medium mb-3">Update Transit Conditions</h4>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label className="flex items-center gap-1">
-                                                    <Thermometer className="h-4 w-4" />
-                                                    Temperature (°C)
-                                                </Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="25"
-                                                    value={transitForm.temperature}
-                                                    onChange={(e) => setTransitForm({ ...transitForm, temperature: e.target.value })}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="flex items-center gap-1">
-                                                    <Droplets className="h-4 w-4" />
-                                                    Humidity (%)
-                                                </Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="60"
-                                                    value={transitForm.humidity}
-                                                    onChange={(e) => setTransitForm({ ...transitForm, humidity: e.target.value })}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2 mt-4">
-                                            <Label>Notes</Label>
-                                            <Textarea
-                                                placeholder="Any observations..."
-                                                value={transitForm.notes}
-                                                onChange={(e) => setTransitForm({ ...transitForm, notes: e.target.value })}
-                                            />
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                            <h4 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
+                                                <Thermometer className="h-4 w-4" />
+                                                IoT Monitoring Active
+                                            </h4>
+                                            <p className="text-sm text-blue-700">
+                                                Temperature, humidity, and location data is being automatically tracked by IoT sensors.
+                                            </p>
                                         </div>
 
                                         <div className="space-y-2 mt-4">
-                                            <Label>Evidence Photo</Label>
+                                            <Label>Delivery Evidence Photo (Optional)</Label>
                                             <CameraInput
                                                 onCapture={setEvidenceImage}
-                                                label="Take Status/Delivery Photo"
+                                                label="Take Delivery Photo"
                                             />
                                         </div>
 
-                                        <div className="flex gap-2 mt-4">
-                                            <Button onClick={handleTransitUpdate} variant="outline" className="flex-1" disabled={isUpdating}>
-                                                <Send className="h-4 w-4 mr-2" />
-                                                Update Transit
-                                            </Button>
-                                            <Button onClick={handleDeliver} className="flex-1 bg-purple-600 hover:bg-purple-700" disabled={isUpdating}>
-                                                <Package className="h-4 w-4 mr-2" />
-                                                Mark Delivered
-                                            </Button>
+                                        {/* Retailer Selection - Required */}
+                                        <div className="space-y-2 mt-4">
+                                            <Label className="flex items-center gap-1">
+                                                <Package className="h-4 w-4" />
+                                                Select Retailer <span className="text-red-500">*</span>
+                                            </Label>
+                                            <select
+                                                className="w-full p-2 border rounded-md bg-white"
+                                                value={selectedRetailerId}
+                                                onChange={(e) => setSelectedRetailerId(e.target.value)}
+                                            >
+                                                <option value="">-- Choose a retailer --</option>
+                                                {retailers.map((r) => (
+                                                    <option key={r.id} value={r.id}>
+                                                        {r.name} {r.shop_name ? `(${r.shop_name})` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {retailers.length === 0 && (
+                                                <p className="text-sm text-orange-600">No retailers registered yet</p>
+                                            )}
                                         </div>
+
+                                        <Button
+                                            onClick={handleDeliver}
+                                            className="w-full mt-4 bg-purple-600 hover:bg-purple-700"
+                                            disabled={isUpdating || !selectedRetailerId}
+                                        >
+                                            <Package className="h-4 w-4 mr-2" />
+                                            {isUpdating ? 'Processing...' : 'Mark as Delivered'}
+                                        </Button>
                                     </div>
 
                                     {/* Route Map Visualization */}

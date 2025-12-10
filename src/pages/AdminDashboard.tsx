@@ -8,8 +8,16 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
     Shield, Package, Truck, Store, Users, LogOut,
-    BarChart3, MapPin, RefreshCw, ExternalLink, Leaf, CheckCircle
+    LayoutDashboard, FileText, Settings, Search, Filter, Download, ChevronRight, Eye, ShieldCheck, Award,
+    BarChart3, MapPin, RefreshCw, ExternalLink, Leaf, CheckCircle, AlertTriangle
 } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -79,6 +87,9 @@ const AdminDashboard: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
+    const [selectedBatch, setSelectedBatch] = useState<any | null>(null);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -128,6 +139,88 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
+    const [isCertifying, setIsCertifying] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [verificationResult, setVerificationResult] = useState<any>(null);
+
+    const handleViewDetails = async (batchId: string) => {
+        setIsLoadingDetails(true);
+        setSelectedBatch(null);
+        setVerificationResult(null); // Reset verification result
+        setIsDetailsOpen(true);
+        try {
+            const response = await batchAPI.getJourney(batchId);
+            setSelectedBatch(response.data);
+        } catch (error) {
+            toast({
+                title: 'Error',
+                description: 'Failed to load batch details',
+                variant: 'destructive',
+            });
+            setIsDetailsOpen(false);
+        } finally {
+            setIsLoadingDetails(false);
+        }
+    };
+
+    const handleVerify = async () => {
+        if (!selectedBatch) return;
+
+        setIsVerifying(true);
+        setVerificationResult(null);
+        try {
+            const response = await batchAPI.verify(selectedBatch.batch.batch_id);
+            setVerificationResult(response.data);
+
+            if (response.data.verified) {
+                toast({
+                    title: 'Verification Successful',
+                    description: 'Batch data matches blockchain record.',
+                    className: 'bg-green-50 border-green-200 text-green-800',
+                });
+            } else {
+                toast({
+                    title: 'Integrity Warning',
+                    description: 'Discrepancies found between database and blockchain!',
+                    variant: 'destructive',
+                });
+            }
+        } catch (error: any) {
+            toast({
+                title: 'Verification Failed',
+                description: error.response?.data?.message || 'Failed to verify batch integrity',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsVerifying(false);
+        }
+    };
+
+    const handleCertify = async () => {
+        if (!selectedBatch) return;
+
+        setIsCertifying(true);
+        try {
+            const response = await batchAPI.certify(selectedBatch.batch.batch_id);
+
+            toast({
+                title: 'Batch Certified',
+                description: `Certificate ID: ${response.data.certificate_id}`,
+            });
+
+            // Refresh details
+            handleViewDetails(selectedBatch.batch.batch_id);
+        } catch (error: any) {
+            toast({
+                title: 'Certification Failed',
+                description: error.response?.data?.message || 'Failed to certify batch',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsCertifying(false);
+        }
+    };
+
     const handleLogout = () => {
         logout();
         navigate('/login');
@@ -171,7 +264,7 @@ const AdminDashboard: React.FC = () => {
             <header className="bg-gray-900 text-white shadow-lg">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <Shield className="h-8 w-8 text-red-500" />
+                        <img src="/android-chrome-192x192.png" alt="TraceSafe Logo" className="h-10 w-10" />
                         <div>
                             <h1 className="text-xl font-bold">Admin Dashboard</h1>
                             <p className="text-sm text-gray-400">TraceSafe Control Center</p>
@@ -347,9 +440,14 @@ const AdminDashboard: React.FC = () => {
                                                 </td>
                                                 <td className="py-3 px-4">{new Date(batch.created_at).toLocaleDateString()}</td>
                                                 <td className="py-3 px-4">
-                                                    <Button variant="ghost" size="sm" onClick={() => navigate(`/scan/${batch.batch_id}`)}>
-                                                        View
-                                                    </Button>
+                                                    <div className="flex gap-2">
+                                                        <Button variant="ghost" size="sm" onClick={() => navigate(`/scan/${batch.batch_id}`)}>
+                                                            <ExternalLink className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(batch.batch_id)}>
+                                                            <Eye className="h-4 w-4 text-blue-600" />
+                                                        </Button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -531,6 +629,188 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
             </main>
+            {/* Batch Details Modal */}
+            <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Batch Details</DialogTitle>
+                        <DialogDescription>Full journey history and evidence</DialogDescription>
+                    </DialogHeader>
+
+                    {isLoadingDetails ? (
+                        <div className="flex justify-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        </div>
+                    ) : selectedBatch ? (
+                        <div className="space-y-6">
+                            {/* Header Info */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <p className="text-sm text-gray-500">Batch ID</p>
+                                    <p className="font-mono font-medium">{selectedBatch.batch.batch_id}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Crop / Variety</p>
+                                    <p className="font-medium">{selectedBatch.batch.crop} ({selectedBatch.batch.variety})</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Farmer</p>
+                                    <p className="font-medium">{selectedBatch.farmer.name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Status</p>
+                                    <Badge className={getStatusColor(selectedBatch.batch.status)}>
+                                        {selectedBatch.batch.status.replace('_', ' ').toUpperCase()}
+                                    </Badge>
+                                </div>
+                            </div>
+
+
+                            {/* Certification Action */}
+                            <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                                <div>
+                                    <h3 className="font-semibold text-blue-900 flex items-center gap-2">
+                                        <ShieldCheck className="h-5 w-5" />
+                                        Smart Certification
+                                    </h3>
+                                    <p className="text-sm text-blue-700">
+                                        {selectedBatch.journey.some((e: any) => e.event_type === 'certified')
+                                            ? 'This batch has been verified and certified on the blockchain.'
+                                            : 'Validate this batch and issue a blockchain certificate.'}
+                                    </p>
+                                </div>
+
+                                {selectedBatch.journey.some((e: any) => e.event_type === 'certified') ? (
+                                    <div className="text-right">
+                                        <Badge className="bg-blue-600 hover:bg-blue-700 text-lg py-1 px-3 mb-1">
+                                            <Award className="h-4 w-4 mr-1" />
+                                            Certified
+                                        </Badge>
+                                        <p className="text-xs font-mono text-blue-800">
+                                            {selectedBatch.journey.find((e: any) => e.event_type === 'certified')?.notes.split('ID: ')[1] || 'Verified'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    (selectedBatch.batch.status === 'received' || selectedBatch.batch.status === 'sold') ? (
+                                        <Button
+                                            onClick={handleCertify}
+                                            disabled={isCertifying}
+                                            className="bg-blue-600 hover:bg-blue-700"
+                                        >
+                                            {isCertifying ? 'Certifying...' : 'Certify Batch'}
+                                        </Button>
+                                    ) : (
+                                        <Badge variant="outline" className="text-gray-500 border-gray-300">
+                                            Not Eligible Yet
+                                        </Badge>
+                                    )
+                                )}
+                            </div>
+
+                            {/* Integrity Verification */}
+                            <div className="flex flex-col p-4 bg-purple-50 border border-purple-100 rounded-lg">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div>
+                                        <h3 className="font-semibold text-purple-900 flex items-center gap-2">
+                                            <Shield className="h-5 w-5" />
+                                            Integrity Verification
+                                        </h3>
+                                        <p className="text-sm text-purple-700">
+                                            Verify that local data matches the immutable blockchain record.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        onClick={handleVerify}
+                                        disabled={isVerifying}
+                                        variant="outline"
+                                        className="border-purple-300 text-purple-700 hover:bg-purple-100"
+                                    >
+                                        {isVerifying ? 'Verifying...' : 'Verify Integrity'}
+                                    </Button>
+                                </div>
+
+                                {verificationResult && (
+                                    <div className={`mt-3 p-3 rounded-md text-sm ${verificationResult.verified ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                        {verificationResult.verified ? (
+                                            <div className="flex items-center gap-2">
+                                                <CheckCircle className="h-5 w-5 text-green-600" />
+                                                <span className="font-medium">Verification Successful: Data is intact.</span>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-2 font-bold">
+                                                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                                                    <span>Tampering Detected!</span>
+                                                </div>
+                                                <ul className="list-disc list-inside space-y-1 pl-1">
+                                                    {verificationResult.discrepancies.map((d: string, i: number) => (
+                                                        <li key={i}>{d}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Journey Timeline */}
+                            <div>
+                                <h3 className="text-lg font-semibold mb-4">Journey Timeline</h3>
+                                <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent">
+                                    {selectedBatch.journey.map((event: any, index: number) => (
+                                        <div key={index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                                            {/* Icon */}
+                                            <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-slate-300 group-[.is-active]:bg-blue-500 text-slate-500 group-[.is-active]:text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                                                <CheckCircle className="w-5 h-5" />
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded border border-slate-200 shadow bg-white">
+                                                <div className="flex items-center justify-between space-x-2 mb-1">
+                                                    <div className="font-bold text-slate-900 capitalize">{event.event_type.replace('_', ' ')}</div>
+                                                    <time className="font-caveat font-medium text-indigo-500">
+                                                        {(() => {
+                                                            const dateVal = event.created_at || event.timestamp;
+                                                            if (!dateVal) return 'N/A';
+                                                            const date = new Date(dateVal);
+                                                            return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
+                                                        })()}
+                                                    </time>
+                                                </div>
+                                                <div className="text-slate-500 text-sm mb-2">
+                                                    by <span className="font-medium text-slate-900">{event.actor_name}</span> ({event.actor_type})
+                                                </div>
+                                                {event.notes && (
+                                                    <div className="text-slate-600 mb-2 bg-slate-50 p-2 rounded text-sm">
+                                                        {event.notes}
+                                                    </div>
+                                                )}
+
+                                                {/* Images */}
+                                                {event.image_urls && event.image_urls.length > 0 && (
+                                                    <div className="mt-3 grid grid-cols-2 gap-2">
+                                                        {event.image_urls.map((url: string, i: number) => (
+                                                            <div key={i} className="relative aspect-video rounded-md overflow-hidden border">
+                                                                <img
+                                                                    src={url}
+                                                                    alt={`Evidence ${i + 1}`}
+                                                                    className="object-cover w-full h-full hover:scale-105 transition-transform"
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-500">No details available</div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

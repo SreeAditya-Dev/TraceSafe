@@ -39,6 +39,21 @@ router.post('/register', async (req, res) => {
 
         const user = result.rows[0];
 
+        // Create role-specific profile
+        if (role === 'retailer') {
+            await query(
+                `INSERT INTO retailers (user_id, name, phone, shop_name) 
+                 VALUES ($1, $2, $3, $4)`,
+                [user.id, name, phone, `${name}'s Shop`]
+            );
+        } else if (role === 'driver') {
+            await query(
+                `INSERT INTO drivers (user_id, name, phone) 
+                 VALUES ($1, $2, $3)`,
+                [user.id, name, phone]
+            );
+        }
+
         // Generate token
         const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
@@ -99,6 +114,86 @@ router.post('/login', async (req, res) => {
         });
     } catch (err) {
         console.error('Login error:', err);
+        res.status(500).json({ error: 'Login failed', details: err.message });
+    }
+});
+
+// AgriStack Farmer ID Login (farmers login with their AgriStack ID)
+router.post('/agristack-login', async (req, res) => {
+    try {
+        const { agristackId } = req.body;
+
+        if (!agristackId) {
+            return res.status(400).json({ error: 'AgriStack Farmer ID required' });
+        }
+
+        // Check if farmer exists in AgriStack registry
+        const agristackResult = await query(
+            'SELECT * FROM agristack_farmers WHERE farmer_id = $1',
+            [agristackId]
+        );
+
+        if (agristackResult.rows.length === 0) {
+            return res.status(401).json({ error: 'AgriStack Farmer ID not found in registry' });
+        }
+
+        const agristackFarmer = agristackResult.rows[0];
+
+        // Find or create farmer account
+        let farmerResult = await query(
+            'SELECT * FROM farmers WHERE agristack_id = $1',
+            [agristackId]
+        );
+
+        let farmer;
+        if (farmerResult.rows.length === 0) {
+            // Create farmer account from AgriStack data
+            const passwordHash = await bcrypt.hash(agristackId, 10); // Use AgriStack ID as password
+
+            // Create user
+            const userResult = await query(
+                `INSERT INTO users (email, password_hash, name, role) 
+                 VALUES ($1, $2, $3, $4) 
+                 RETURNING *`,
+                [`${agristackId}@agristack.local`, passwordHash, agristackFarmer.name, 'farmer']
+            );
+            const user = userResult.rows[0];
+
+            // Create farmer profile
+            farmerResult = await query(
+                `INSERT INTO farmers (user_id, name, agristack_id, verified, phone) 
+                 VALUES ($1, $2, $3, $4, $5) 
+                 RETURNING *`,
+                [user.id, agristackFarmer.name, agristackId, agristackFarmer.verified, '']
+            );
+            farmer = farmerResult.rows[0];
+        } else {
+            farmer = farmerResult.rows[0];
+        }
+
+        // Get user account
+        const userResult = await query(
+            'SELECT * FROM users WHERE id = (SELECT user_id FROM farmers WHERE id = $1)',
+            [farmer.id]
+        );
+        const user = userResult.rows[0];
+
+        // Generate token
+        const token = jwt.sign({ userId: user.id, role: 'farmer' }, JWT_SECRET, { expiresIn: '7d' });
+
+        res.json({
+            message: 'AgriStack login successful',
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                phone: user.phone,
+            },
+            token,
+        });
+    } catch (err) {
+        console.error('AgriStack login error:', err);
         res.status(500).json({ error: 'Login failed', details: err.message });
     }
 });
@@ -185,13 +280,79 @@ router.get('/me', authenticate, async (req, res) => {
                 name: user.name,
                 role: user.role,
                 phone: user.phone,
-                created_at: user.created_at,
             },
             profile: profileData,
         });
     } catch (err) {
         console.error('Get profile error:', err);
         res.status(500).json({ error: 'Failed to get profile', details: err.message });
+    }
+});
+
+// Update user profile
+router.put('/profile', authenticate, async (req, res) => {
+    try {
+        const user = req.user;
+        const { name, phone, fssaiLicense, shopName, vehicleNumber, licenseNumber } = req.body;
+
+        // Update base user info
+        await query(
+            'UPDATE users SET name = COALESCE($1, name), phone = COALESCE($2, phone) WHERE id = $3',
+            [name, phone, user.id]
+        );
+
+        let profileData = null;
+
+        // Update role-specific profile
+        if (user.role === 'farmer') {
+            const result = await query(
+                `UPDATE farmers 
+                 SET name = COALESCE($1, name), 
+                     phone = COALESCE($2, phone),
+                     fssai_license = COALESCE($3, fssai_license)
+                 WHERE user_id = $4 
+                 RETURNING *`,
+                [name, phone, fssaiLicense, user.id]
+            );
+            profileData = result.rows[0];
+        } else if (user.role === 'driver') {
+            const result = await query(
+                `UPDATE drivers 
+                 SET name = COALESCE($1, name), 
+                     phone = COALESCE($2, phone),
+                     vehicle_number = COALESCE($3, vehicle_number),
+                     license_number = COALESCE($4, license_number)
+                 WHERE user_id = $5 
+                 RETURNING *`,
+                [name, phone, vehicleNumber, licenseNumber, user.id]
+            );
+            profileData = result.rows[0];
+        } else if (user.role === 'retailer') {
+            const result = await query(
+                `UPDATE retailers 
+                 SET name = COALESCE($1, name), 
+                     phone = COALESCE($2, phone),
+                     shop_name = COALESCE($3, shop_name),
+                     fssai_license = COALESCE($4, fssai_license)
+                 WHERE user_id = $5 
+                 RETURNING *`,
+                [name, phone, shopName, fssaiLicense, user.id]
+            );
+            profileData = result.rows[0];
+        }
+
+        res.json({
+            message: 'Profile updated successfully',
+            user: {
+                ...user,
+                name: name || user.name,
+                phone: phone || user.phone,
+            },
+            profile: profileData,
+        });
+    } catch (err) {
+        console.error('Update profile error:', err);
+        res.status(500).json({ error: 'Failed to update profile', details: err.message });
     }
 });
 

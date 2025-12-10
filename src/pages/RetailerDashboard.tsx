@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
     Store, QrCode, MapPin, Package, CheckCircle,
-    LogOut, Camera, ShoppingCart, Eye
+    LogOut, Camera, ShoppingCart, Eye, User
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -21,6 +21,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { LocationInput } from '@/components/LocationInput';
+import { CameraInput } from '@/components/CameraInput';
 
 interface Batch {
     id: string;
@@ -81,16 +82,25 @@ const RetailerDashboard: React.FC = () => {
         }
     };
 
+    const [evidenceImage, setEvidenceImage] = useState<string | null>(null);
+
     const handleReceive = async () => {
         if (!loadedBatch) return;
 
         setIsProcessing(true);
         try {
-            const response = await batchAPI.receive(loadedBatch.batch_id, {
-                latitude: parseFloat(location.lat) || 0,
-                longitude: parseFloat(location.lng) || 0,
-                notes: 'Received at retail location',
-            });
+            const formData = new FormData();
+            formData.append('latitude', location.lat || '0');
+            formData.append('longitude', location.lng || '0');
+            formData.append('notes', 'Received at retail location');
+
+            if (evidenceImage) {
+                const fetchRes = await fetch(evidenceImage);
+                const blob = await fetchRes.blob();
+                formData.append('image', blob, 'receive-evidence.jpg');
+            }
+
+            const response = await batchAPI.receive(loadedBatch.batch_id, formData);
 
             toast({
                 title: 'Batch Received',
@@ -177,10 +187,23 @@ const RetailerDashboard: React.FC = () => {
                             <p className="text-sm text-purple-100">Welcome, {user?.name}</p>
                         </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-purple-700">
-                        <LogOut className="h-4 w-4 mr-2" />
-                        Logout
-                    </Button>
+                    <div className="flex items-center gap-4">
+                        <Button variant="ghost" onClick={() => navigate('/profile')}>
+                            My Profile
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <div className="bg-purple-100 p-2 rounded-full">
+                                <User className="h-6 w-6 text-purple-600" />
+                            </div>
+                            <div>
+                                <p className="font-semibold">{user?.name}</p>
+                                <p className="text-xs text-gray-500">Retailer</p>
+                            </div>
+                        </div>
+                        <Button variant="outline" size="icon" onClick={handleLogout}>
+                            <LogOut className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </header>
 
@@ -247,15 +270,43 @@ const RetailerDashboard: React.FC = () => {
                                     />
                                 </div>
 
-                                {(loadedBatch.status === 'delivered' || loadedBatch.status === 'in_transit') && (
-                                    <Button
-                                        onClick={handleReceive}
-                                        className="w-full bg-green-600 hover:bg-green-700"
-                                        disabled={isProcessing}
-                                    >
-                                        <CheckCircle className="h-4 w-4 mr-2" />
-                                        {isProcessing ? 'Processing...' : 'Confirm Receipt'}
-                                    </Button>
+                                {loadedBatch.status === 'delivered' && (
+                                    <div className="space-y-4">
+                                        <CameraInput
+                                            onCapture={setEvidenceImage}
+                                            label="Proof of Receipt"
+                                        />
+                                        <Button
+                                            onClick={handleReceive}
+                                            className="w-full bg-green-600 hover:bg-green-700"
+                                            disabled={isProcessing}
+                                        >
+                                            <CheckCircle className="h-4 w-4 mr-2" />
+                                            {isProcessing ? 'Processing...' : 'Confirm Receipt'}
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {loadedBatch.status === 'in_transit' && (
+                                    <div className="text-center py-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                        <p className="text-yellow-700 font-medium">
+                                            ⏳ Awaiting Driver Delivery
+                                        </p>
+                                        <p className="text-sm text-yellow-600">
+                                            The driver must mark this batch as delivered before you can receive it
+                                        </p>
+                                    </div>
+                                )}
+
+                                {loadedBatch.status === 'created' && (
+                                    <div className="text-center py-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <p className="text-blue-700 font-medium">
+                                            📦 Not Yet Picked Up
+                                        </p>
+                                        <p className="text-sm text-blue-600">
+                                            This batch is still with the farmer
+                                        </p>
+                                    </div>
                                 )}
 
                                 {loadedBatch.status === 'received' && (

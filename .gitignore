@@ -136,9 +136,10 @@ fabric/builders/
 fabric/crypto-config/
 fabric/channel-artifacts/
 fabric/chaincode/**/vendor/
-fabric/chaincode/**/tracesafe
 *.block
 *.tx
 *.tar.gz
 fabric/wallets/
+fabric/wallets/farmerorg/Admin.id
 fabric/connection-profiles/
+database_export.json

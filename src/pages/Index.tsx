@@ -275,8 +275,8 @@ const Index = () => {
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-2">
-              <Leaf className="h-6 w-6 text-green-500" />
-              <span className="text-xl font-bold">TraceSafe</span>
+              <img src="/android-chrome-192x192.png" alt="TraceSafe Logo" className="h-8 w-8" />
+              <span className="text-xl font-bold text-gray-900">TraceSafe</span>
             </div>
             <p className="text-gray-400 text-sm">
               Farm-to-Fork Traceability Platform | Supply Chain Transparency

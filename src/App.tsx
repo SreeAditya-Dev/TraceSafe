@@ -15,6 +15,7 @@ import TruckDashboard from "./pages/TruckDashboard";
 import RetailerDashboard from "./pages/RetailerDashboard";
 import CustomerView from "./pages/CustomerView";
 import AdminDashboard from "./pages/AdminDashboard";
+import Profile from "./pages/Profile";
 
 // Government Pages
 import GovtLayout from "./layouts/GovtLayout";
@@ -38,6 +39,14 @@ const App = () => (
             <Route path="/scan/:batchId" element={<CustomerView />} />
 
             {/* Protected Dashboard Routes */}
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/farmer"
               element={
