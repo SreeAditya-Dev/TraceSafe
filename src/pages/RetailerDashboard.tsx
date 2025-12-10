@@ -21,6 +21,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { LocationInput } from '@/components/LocationInput';
+import { CameraInput } from '@/components/CameraInput';
 
 interface Batch {
     id: string;
@@ -81,16 +82,25 @@ const RetailerDashboard: React.FC = () => {
         }
     };
 
+    const [evidenceImage, setEvidenceImage] = useState<string | null>(null);
+
     const handleReceive = async () => {
         if (!loadedBatch) return;
 
         setIsProcessing(true);
         try {
-            const response = await batchAPI.receive(loadedBatch.batch_id, {
-                latitude: parseFloat(location.lat) || 0,
-                longitude: parseFloat(location.lng) || 0,
-                notes: 'Received at retail location',
-            });
+            const formData = new FormData();
+            formData.append('latitude', location.lat || '0');
+            formData.append('longitude', location.lng || '0');
+            formData.append('notes', 'Received at retail location');
+
+            if (evidenceImage) {
+                const fetchRes = await fetch(evidenceImage);
+                const blob = await fetchRes.blob();
+                formData.append('image', blob, 'receive-evidence.jpg');
+            }
+
+            const response = await batchAPI.receive(loadedBatch.batch_id, formData);
 
             toast({
                 title: 'Batch Received',
@@ -261,14 +271,20 @@ const RetailerDashboard: React.FC = () => {
                                 </div>
 
                                 {loadedBatch.status === 'delivered' && (
-                                    <Button
-                                        onClick={handleReceive}
-                                        className="w-full bg-green-600 hover:bg-green-700"
-                                        disabled={isProcessing}
-                                    >
-                                        <CheckCircle className="h-4 w-4 mr-2" />
-                                        {isProcessing ? 'Processing...' : 'Confirm Receipt'}
-                                    </Button>
+                                    <div className="space-y-4">
+                                        <CameraInput
+                                            onCapture={setEvidenceImage}
+                                            label="Proof of Receipt"
+                                        />
+                                        <Button
+                                            onClick={handleReceive}
+                                            className="w-full bg-green-600 hover:bg-green-700"
+                                            disabled={isProcessing}
+                                        >
+                                            <CheckCircle className="h-4 w-4 mr-2" />
+                                            {isProcessing ? 'Processing...' : 'Confirm Receipt'}
+                                        </Button>
+                                    </div>
                                 )}
 
                                 {loadedBatch.status === 'in_transit' && (

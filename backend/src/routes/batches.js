@@ -732,7 +732,12 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
 });
 
 // Receive batch (Retailer receives)
-router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (req, res) => {
+router.post('/:batchId/receive', authenticate, requireRole('retailer'), upload.any(), async (req, res) => {
+    // Handle file from upload.any()
+    if (req.files && req.files.length > 0) {
+        const imageFile = req.files.find(f => f.fieldname === 'image');
+        if (imageFile) req.file = imageFile;
+    }
     const client = await getClient();
     try {
         await client.query('BEGIN');
@@ -779,6 +784,13 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
             });
         }
 
+        // Upload image if present
+        let imageUrls = [];
+        if (req.file) {
+            const { url } = await uploadFile(req.file.originalname, req.file.buffer, req.file.mimetype);
+            imageUrls.push(url);
+        }
+
         // Update batch
         await client.query(
             `UPDATE batches SET status = 'received', current_owner_type = 'retailer', current_owner_id = $1 WHERE id = $2`,
@@ -797,11 +809,11 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
         await client.query(
             `INSERT INTO journey_events (
         batch_id, event_type, actor_type, actor_id, actor_name,
-        latitude, longitude, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        latitude, longitude, notes, image_urls
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [batch.id, 'received', 'retailer', retailer.id, retailer.name,
             parseFloat(latitude) || null, parseFloat(longitude) || null,
-            notes || `Received by retailer ${retailer.name}`]
+            notes || `Received by retailer ${retailer.name}`, imageUrls]
         );
 
         // Update farmer score (successful delivery)
@@ -992,6 +1004,7 @@ router.get('/:batchId/journey', async (req, res) => {
         res.json({
             batch: {
                 id: batch.batch_id,
+                batch_id: batch.batch_id,
                 crop: batch.crop,
                 variety: batch.variety,
                 quantity: `${batch.quantity} ${batch.unit}`,
@@ -1006,6 +1019,8 @@ router.get('/:batchId/journey', async (req, res) => {
                 created_at: batch.created_at,
                 spoilage_risk: batch.spoilage_risk,
                 spoilage_probability: batch.spoilage_probability,
+                fssai_license: batch.fssai_license,
+                farmer_license: batch.farmer_license,
             },
             farmer: {
                 name: batch.farmer_name,
@@ -1017,6 +1032,7 @@ router.get('/:batchId/journey', async (req, res) => {
                 event_type: event.event_type,
                 actor: event.actor_name,
                 actor_type: event.actor_type,
+                actor_name: event.actor_name,
                 location: {
                     latitude: event.latitude,
                     longitude: event.longitude,
@@ -1027,7 +1043,10 @@ router.get('/:batchId/journey', async (req, res) => {
                     humidity: event.humidity,
                 },
                 notes: event.notes,
+                image_urls: event.image_urls,
+                blockchain_tx_id: event.blockchain_tx_id,
                 timestamp: event.created_at,
+                created_at: event.created_at,
             })),
             transfers: transfersResult.rows,
         });

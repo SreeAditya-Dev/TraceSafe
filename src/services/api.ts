@@ -98,8 +98,10 @@ export const batchAPI = {
             headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
         }),
 
-    receive: (batchId: string, data: { latitude?: number; longitude?: number; notes?: string }) =>
-        api.post(`/api/batches/${batchId}/receive`, data),
+    receive: (batchId: string, data: { latitude?: number; longitude?: number; notes?: string; image?: string | null } | FormData) =>
+        api.post(`/api/batches/${batchId}/receive`, data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+        }),
 
     sell: (batchId: string, data: { notes?: string }) =>
         api.post(`/api/batches/${batchId}/sell`, data),

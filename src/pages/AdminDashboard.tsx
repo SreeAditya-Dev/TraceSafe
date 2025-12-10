@@ -8,8 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
     Shield, Package, Truck, Store, Users, LogOut,
-    BarChart3, MapPin, RefreshCw, ExternalLink, Leaf, CheckCircle
+    BarChart3, MapPin, RefreshCw, ExternalLink, Leaf, CheckCircle, Eye
 } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -79,6 +86,9 @@ const AdminDashboard: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
+    const [selectedBatch, setSelectedBatch] = useState<any | null>(null);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -125,6 +135,25 @@ const AdminDashboard: React.FC = () => {
             });
         } finally {
             setIsSyncing(false);
+        }
+    };
+
+    const handleViewDetails = async (batchId: string) => {
+        setIsLoadingDetails(true);
+        setSelectedBatch(null);
+        setIsDetailsOpen(true);
+        try {
+            const response = await batchAPI.getJourney(batchId);
+            setSelectedBatch(response.data);
+        } catch (error) {
+            toast({
+                title: 'Error',
+                description: 'Failed to load batch details',
+                variant: 'destructive',
+            });
+            setIsDetailsOpen(false);
+        } finally {
+            setIsLoadingDetails(false);
         }
     };
 
@@ -347,9 +376,14 @@ const AdminDashboard: React.FC = () => {
                                                 </td>
                                                 <td className="py-3 px-4">{new Date(batch.created_at).toLocaleDateString()}</td>
                                                 <td className="py-3 px-4">
-                                                    <Button variant="ghost" size="sm" onClick={() => navigate(`/scan/${batch.batch_id}`)}>
-                                                        View
-                                                    </Button>
+                                                    <div className="flex gap-2">
+                                                        <Button variant="ghost" size="sm" onClick={() => navigate(`/scan/${batch.batch_id}`)}>
+                                                            <ExternalLink className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(batch.batch_id)}>
+                                                            <Eye className="h-4 w-4 text-blue-600" />
+                                                        </Button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -531,6 +565,100 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
             </main>
+            {/* Batch Details Modal */}
+            <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Batch Details</DialogTitle>
+                        <DialogDescription>Full journey history and evidence</DialogDescription>
+                    </DialogHeader>
+
+                    {isLoadingDetails ? (
+                        <div className="flex justify-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        </div>
+                    ) : selectedBatch ? (
+                        <div className="space-y-6">
+                            {/* Header Info */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <p className="text-sm text-gray-500">Batch ID</p>
+                                    <p className="font-mono font-medium">{selectedBatch.batch.batch_id}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Crop / Variety</p>
+                                    <p className="font-medium">{selectedBatch.batch.crop} ({selectedBatch.batch.variety})</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Farmer</p>
+                                    <p className="font-medium">{selectedBatch.farmer.name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Status</p>
+                                    <Badge className={getStatusColor(selectedBatch.batch.status)}>
+                                        {selectedBatch.batch.status.replace('_', ' ').toUpperCase()}
+                                    </Badge>
+                                </div>
+                            </div>
+
+                            {/* Journey Timeline */}
+                            <div>
+                                <h3 className="text-lg font-semibold mb-4">Journey Timeline</h3>
+                                <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent">
+                                    {selectedBatch.journey.map((event: any, index: number) => (
+                                        <div key={index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                                            {/* Icon */}
+                                            <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-slate-300 group-[.is-active]:bg-blue-500 text-slate-500 group-[.is-active]:text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                                                <CheckCircle className="w-5 h-5" />
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded border border-slate-200 shadow bg-white">
+                                                <div className="flex items-center justify-between space-x-2 mb-1">
+                                                    <div className="font-bold text-slate-900 capitalize">{event.event_type.replace('_', ' ')}</div>
+                                                    <time className="font-caveat font-medium text-indigo-500">
+                                                        {(() => {
+                                                            const dateVal = event.created_at || event.timestamp;
+                                                            if (!dateVal) return 'N/A';
+                                                            const date = new Date(dateVal);
+                                                            return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
+                                                        })()}
+                                                    </time>
+                                                </div>
+                                                <div className="text-slate-500 text-sm mb-2">
+                                                    by <span className="font-medium text-slate-900">{event.actor_name}</span> ({event.actor_type})
+                                                </div>
+                                                {event.notes && (
+                                                    <div className="text-slate-600 mb-2 bg-slate-50 p-2 rounded text-sm">
+                                                        {event.notes}
+                                                    </div>
+                                                )}
+
+                                                {/* Images */}
+                                                {event.image_urls && event.image_urls.length > 0 && (
+                                                    <div className="mt-3 grid grid-cols-2 gap-2">
+                                                        {event.image_urls.map((url: string, i: number) => (
+                                                            <div key={i} className="relative aspect-video rounded-md overflow-hidden border">
+                                                                <img
+                                                                    src={url}
+                                                                    alt={`Evidence ${i + 1}`}
+                                                                    className="object-cover w-full h-full hover:scale-105 transition-transform"
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-500">No details available</div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
