@@ -1,43 +1,43 @@
 /*
- TraceSafe - ESP8266 Truck Node (Full)
- - AP provisioning (store creds in EEPROM)
+ TraceSafe - ESP32 Truck Node (Full)
+ - AP provisioning (store creds in Preferences/NVS)
  - Long-press button (>=3s) to erase creds
  - Buzzer beep on WiFi connected
  - DS18B20 (crate temp), DHT22 (ambient + humidity)
- - NEO-6M GPS (SoftwareSerial)
+ - NEO-6M GPS (HardwareSerial)
  - Fan control logic with hysteresis
  - JSON POST to BACKEND_URL (no auth header)
  - NTP time sync for accurate timestamps
  
- Wiring (NodeMCU labels / recommended pins):
-  DS18B20 data -> D1 (GPIO5)
-  DHT22 data    -> D2 (GPIO4)
-  GPS TX        -> D7 (GPIO13)  [GPS TX -> ESP RX of software serial]
-  GPS RX        -> D8 (GPIO15)  [optional]
+ Wiring (ESP32 DevKit v1 / recommended pins):
+  DS18B20 data -> GPIO 5   (D5)
+  DHT22 data    -> GPIO 4   (D4)
+  GPS TX        -> GPIO 16  (RX2) [GPS TX -> ESP32 RX2]
+  GPS RX        -> GPIO 17  (TX2) [ESP32 TX2 -> GPS RX]
 
-  RELAY/FAN     -> D6 (GPIO12)  [Connect to Relay IN]
-  BUTTON        -> D3 (GPIO0)   (use internal pullup)
+  RELAY/FAN     -> GPIO 12  (D12) [Connect to Relay IN]
+  BUTTON        -> GPIO 0   (BOOT button, has internal pullup)
 
-  BUZZER        -> D4 (GPIO2)
-  4.7kΩ between DS18B20 data and 3.3V
+  BUZZER        -> GPIO 2   (D2, Built-in LED pin)
+  4.7kΩ resistor between DS18B20 data and 3.3V
 
- Libraries required:
-   - ESP8266WiFi
-   - ESP8266WebServer
-   - EEPROM
-   - ESP8266HTTPClient
-   - OneWire
-   - DallasTemperature
-   - DHT
-   - TinyGPSPlus
-   - SoftwareSerial
-   - NTPClient (for time sync)
+ Libraries required (Install via Arduino Library Manager):
+   - WiFi (built-in ESP32)
+   - WebServer (built-in ESP32)
+   - Preferences (built-in ESP32)
+   - HTTPClient (built-in ESP32)
+   - WiFiUdp (built-in ESP32)
+   - OneWire by Paul Stoffregen
+   - DallasTemperature by Miles Burton
+   - DHT sensor library by Adafruit
+   - TinyGPSPlus by Mikal Hart
+   - NTPClient by Fabrice Weinberg
 */
 
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <EEPROM.h>
-#include <ESP8266HTTPClient.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Preferences.h>
+#include <HTTPClient.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
 #include <time.h>
@@ -46,29 +46,22 @@
 #include <DallasTemperature.h>
 #include "DHT.h"
 #include <TinyGPSPlus.h>
-#include <SoftwareSerial.h>
 
 // ---------------- USER CONFIGURABLE ----------------
-#define EEPROM_SIZE 1024
-#define EEPROM_SSID_ADDR 0  // allocated blocks (we'll store strings with separators)
-#define EEPROM_PASS_ADDR 200
-#define EEPROM_BACKEND_ADDR 500
-#define EEPROM_BATCH_ADDR 800
-
 // default intervals
 const unsigned long SENSOR_READ_INTERVAL_MS = 30UL * 1000UL;
 const unsigned long SEND_INTERVAL_MS = 60UL * 1000UL;
 
-// pins (NodeMCU Dx labels)
-#define DS18B20_PIN D1  // GPIO5
-#define DHT_PIN D2      // GPIO4
-#define GPS_RX_PIN D7   // GPIO13 (GPS TX -> ESP software RX)
-#define GPS_TX_PIN D8   // GPIO15 (optional)
+// pins (ESP32 GPIO numbers)
+#define DS18B20_PIN 5   // GPIO5
+#define DHT_PIN 4       // GPIO4
+#define GPS_RX_PIN 16   // GPIO16 (RX2)
+#define GPS_TX_PIN 17   // GPIO17 (TX2)
 
-#define RELAY_PIN D6   // GPIO12 (Connect to Relay Module IN pin)
-#define BUTTON_PIN D3  // GPIO0 (with internal pullup)
+#define RELAY_PIN 12    // GPIO12 (Connect to Relay Module IN pin)
+#define BUTTON_PIN 0    // GPIO0 (BOOT button with internal pullup)
 
-#define BUZZER_PIN D4  // GPIO2
+#define BUZZER_PIN 2    // GPIO2 (Built-in LED)
 
 #define DHTTYPE DHT22
 
@@ -86,7 +79,8 @@ const long UTC_OFFSET_SEC = 0;             // UTC timezone, adjust if needed (e.
 const int NTP_UPDATE_INTERVAL_MS = 60000;  // Update NTP every 60 seconds
 
 // ---------------------------------------------------
-ESP8266WebServer server(80);
+WebServer server(80);
+Preferences preferences;
 
 // NTP Client
 WiFiUDP ntpUDP;
@@ -96,7 +90,7 @@ bool ntpInitialized = false;
 OneWire oneWire(DS18B20_PIN);
 DallasTemperature sensors(&oneWire);
 DHT dht(DHT_PIN, DHTTYPE);
-SoftwareSerial gpsSerial(GPS_RX_PIN, GPS_TX_PIN);  // RX, TX
+HardwareSerial gpsSerial(2);  // Use UART2 for GPS
 TinyGPSPlus gps;
 
 // runtime
@@ -119,9 +113,7 @@ bool fanState = false;
 void startAP();
 void handleRoot();
 void handleSave();
-void loadFromEEPROM();
-void saveStringToEEPROM(int addr, const String& str);
-String readStringFromEEPROM(int addr, int maxLen);
+void loadFromPreferences();
 void eraseCreds();
 void setFan(bool on);
 void fanLogic();
@@ -135,50 +127,35 @@ void initNTP();
 unsigned long getEpochTime();
 bool checkWiFiConnection();
 
-// ---------------- EEPROM helpers ----------------
-void saveStringToEEPROM(int addr, const String& str) {
-  int len = str.length();
-  EEPROM.write(addr, len & 0xFF);
-  EEPROM.write(addr + 1, (len >> 8) & 0xFF);
-  for (int i = 0; i < len; i++) {
-    EEPROM.write(addr + 2 + i, str[i]);
+// ---------------- Preferences helpers (replaces EEPROM) ----------------
+void loadFromPreferences() {
+  preferences.begin("tracesafe", true);  // read-only mode
+  storedSSID = preferences.getString("ssid", "");
+  storedPASS = preferences.getString("pass", "");
+  storedBACKEND = preferences.getString("backend", "http://172.16.45.33:3000/api/iot/data");
+  storedBATCH = preferences.getString("batch", "");
+  preferences.end();
+  
+  if (storedBACKEND.length() < 5) {
+    storedBACKEND = "http://172.16.45.33:3000/api/iot/data";
   }
-  EEPROM.commit();
-}
-String readStringFromEEPROM(int addr, int maxLen) {
-  int lo = EEPROM.read(addr);
-  int hi = EEPROM.read(addr + 1);
-  int len = lo | (hi << 8);
-  if (len <= 0 || len > maxLen) return "";
-  char buf[len + 1];
-  for (int i = 0; i < len; i++) {
-    buf[i] = EEPROM.read(addr + 2 + i);
-  }
-  buf[len] = 0;
-  return String(buf);
-}
-
-void loadFromEEPROM() {
-  storedSSID = readStringFromEEPROM(EEPROM_SSID_ADDR, 180);
-  storedPASS = readStringFromEEPROM(EEPROM_PASS_ADDR, 180);
-  storedBACKEND = readStringFromEEPROM(EEPROM_BACKEND_ADDR, 260);
-  if (storedBACKEND.length() < 5) storedBACKEND = "http://172.16.45.33:3000/api/iot/data";
-  storedBATCH = readStringFromEEPROM(EEPROM_BATCH_ADDR, 120);
 }
 
 // erase credentials
 void eraseCreds() {
-  // write zero lengths
-  EEPROM.write(EEPROM_SSID_ADDR, 0);
-  EEPROM.write(EEPROM_SSID_ADDR + 1, 0);
-  EEPROM.write(EEPROM_PASS_ADDR, 0);
-  EEPROM.write(EEPROM_PASS_ADDR + 1, 0);
-  EEPROM.write(EEPROM_BACKEND_ADDR, 0);
-  EEPROM.write(EEPROM_BACKEND_ADDR + 1, 0);
-  EEPROM.write(EEPROM_BATCH_ADDR, 0);
-  EEPROM.write(EEPROM_BATCH_ADDR + 1, 0);
-  EEPROM.commit();
+  preferences.begin("tracesafe", false);  // read-write mode
+  preferences.clear();  // Clear all stored preferences
+  preferences.end();
   storedSSID = storedPASS = storedBACKEND = storedBATCH = "";
+}
+
+void saveCredentials(String ssid, String pass, String batch) {
+  preferences.begin("tracesafe", false);  // read-write mode
+  preferences.putString("ssid", ssid);
+  preferences.putString("pass", pass);
+  preferences.putString("batch", batch);
+  // Backend is handled by default, not saved from user input
+  preferences.end();
 }
 
 // ---------------- AP Web Form ----------------
@@ -234,18 +211,14 @@ void handleSave() {
   }
   String ssid = server.arg("ssid");
   String pass = server.arg("pass");
-  // Backend URL is handled by default in code, not user input
   String batch = server.arg("batch");
 
   if (ssid.length() < 1) {
     server.send(400, "text/plain", "SSID required");
     return;
   }
-  // save to EEPROM
-  saveStringToEEPROM(EEPROM_SSID_ADDR, ssid);
-  saveStringToEEPROM(EEPROM_PASS_ADDR, pass);
-  // Do not overwrite backend addr
-  saveStringToEEPROM(EEPROM_BATCH_ADDR, batch);
+  // save to Preferences
+  saveCredentials(ssid, pass, batch);
   server.send(200, "text/plain", "Saved. Restarting...");
   delay(1000);
   ESP.restart();
@@ -266,12 +239,11 @@ void setup() {
   else digitalWrite(RELAY_PIN, HIGH);
   setFan(false);
 
-  EEPROM.begin(EEPROM_SIZE);
-  loadFromEEPROM();
+  loadFromPreferences();
 
   sensors.begin();
   dht.begin();
-  gpsSerial.begin(9600);
+  gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);  // RX, TX pins
 
   // If stored SSID empty -> create AP for provisioning
   if (storedSSID.length() < 2) {
@@ -280,7 +252,6 @@ void setup() {
     // try to connect to WiFi
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);  // Enable auto-reconnect
-    WiFi.persistent(true);        // Save WiFi config to flash
     WiFi.begin(storedSSID.c_str(), storedPASS.c_str());
     Serial.printf("Trying WiFi (%s) ...\n", storedSSID.c_str());
     unsigned long t0 = millis();
@@ -296,7 +267,7 @@ void setup() {
     Serial.println();
     if (connected) {
       Serial.println("WiFi connected OK: " + WiFi.localIP().toString());
-      beep(1, 80);  // Single short beep on connect (reduced from 2 beeps)
+      beep(1, 80);  // Single short beep on connect
       // Initialize NTP after WiFi connection
       initNTP();
     } else {
@@ -318,9 +289,10 @@ void setupServerRoutes() {
 
 // Start Access Point for provisioning
 void startAP() {
-  String apName = "TraceSafe-" + String(ESP.getChipId(), HEX);
+  uint64_t chipid = ESP.getEfuseMac();  // Get unique chip ID
+  String apName = "TraceSafe-" + String((uint32_t)(chipid >> 32), HEX);
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(apName.c_str(), "tracesafe");  // default password for AP; open if prefer
+  WiFi.softAP(apName.c_str(), "tracesafe");  // default password for AP
   IPAddress myIP = WiFi.softAPIP();
   Serial.printf("Started AP %s, IP: %s\n", apName.c_str(), myIP.toString().c_str());
   // start server for provisioning
@@ -508,20 +480,19 @@ bool sendToBackend() {
   int code = -1;
   // Try up to 3 times
   for (int i = 0; i < 3; i++) {
-    WiFiClient client;
     HTTPClient http;
 
     // Configure HTTP client
     http.setReuse(false);  // Don't reuse connections
 
-    if (!http.begin(client, url)) {
+    if (!http.begin(url)) {
       Serial.printf("POST Attempt %d: http.begin() failed\n", i + 1);
       delay(1000);
       continue;
     }
 
     http.addHeader("Content-Type", "application/json");
-    http.setTimeout(10000);  // 10s timeout (increased from 3s)
+    http.setTimeout(10000);  // 10s timeout
 
     code = http.POST(payload);
 
