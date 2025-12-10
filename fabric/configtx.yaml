@@ -1,0 +1,213 @@
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Channel and Organization Configuration for TraceSafe
+
+Organizations:
+  - &OrdererOrg
+    Name: OrdererOrg
+    ID: OrdererMSP
+    MSPDir: crypto-config/ordererOrganizations/tracesafe.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OrdererMSP.admin')"
+
+  - &FarmerOrg
+    Name: FarmerOrgMSP
+    ID: FarmerOrgMSP
+    MSPDir: crypto-config/peerOrganizations/farmerorg.tracesafe.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('FarmerOrgMSP.admin', 'FarmerOrgMSP.peer', 'FarmerOrgMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('FarmerOrgMSP.admin', 'FarmerOrgMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('FarmerOrgMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('FarmerOrgMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.farmerorg.tracesafe.com
+        Port: 7051
+
+  - &DriverOrg
+    Name: DriverOrgMSP
+    ID: DriverOrgMSP
+    MSPDir: crypto-config/peerOrganizations/driverorg.tracesafe.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('DriverOrgMSP.admin', 'DriverOrgMSP.peer', 'DriverOrgMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('DriverOrgMSP.admin', 'DriverOrgMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('DriverOrgMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('DriverOrgMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.driverorg.tracesafe.com
+        Port: 8051
+
+  - &RetailerOrg
+    Name: RetailerOrgMSP
+    ID: RetailerOrgMSP
+    MSPDir: crypto-config/peerOrganizations/retailerorg.tracesafe.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('RetailerOrgMSP.admin', 'RetailerOrgMSP.peer', 'RetailerOrgMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('RetailerOrgMSP.admin', 'RetailerOrgMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('RetailerOrgMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('RetailerOrgMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.retailerorg.tracesafe.com
+        Port: 9051
+
+  - &RegulatorOrg
+    Name: RegulatorOrgMSP
+    ID: RegulatorOrgMSP
+    MSPDir: crypto-config/peerOrganizations/regulatororg.tracesafe.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('RegulatorOrgMSP.admin', 'RegulatorOrgMSP.peer', 'RegulatorOrgMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('RegulatorOrgMSP.admin', 'RegulatorOrgMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('RegulatorOrgMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('RegulatorOrgMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.regulatororg.tracesafe.com
+        Port: 10051
+
+Capabilities:
+  Channel: &ChannelCapabilities
+    V2_0: true
+  Orderer: &OrdererCapabilities
+    V2_0: true
+  Application: &ApplicationCapabilities
+    V2_0: true
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+  OrdererType: etcdraft
+  Addresses:
+    - orderer.tracesafe.com:7050
+  EtcdRaft:
+    Consenters:
+      - Host: orderer.tracesafe.com
+        Port: 7050
+        ClientTLSCert: crypto-config/ordererOrganizations/tracesafe.com/orderers/orderer.tracesafe.com/tls/server.crt
+        ServerTLSCert: crypto-config/ordererOrganizations/tracesafe.com/orderers/orderer.tracesafe.com/tls/server.crt
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 10
+    AbsoluteMaxBytes: 99 MB
+    PreferredMaxBytes: 512 KB
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Profiles:
+  TraceSafeOrdererGenesis:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities:
+        <<: *OrdererCapabilities
+    Consortiums:
+      TraceSafeConsortium:
+        Organizations:
+          - *FarmerOrg
+          - *DriverOrg
+          - *RetailerOrg
+          - *RegulatorOrg
+
+  TraceSafeChannel:
+    Consortium: TraceSafeConsortium
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities:
+        <<: *OrdererCapabilities
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *FarmerOrg
+        - *DriverOrg
+        - *RetailerOrg
+        - *RegulatorOrg
+      Capabilities:
+        <<: *ApplicationCapabilities
