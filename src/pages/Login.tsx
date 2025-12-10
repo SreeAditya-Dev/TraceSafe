@@ -39,11 +39,13 @@ const roleDescriptions = {
 const Login: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { quickLogin, login, register } = useAuth();
+    const { quickLogin, login, register, loginWithAgriStack } = useAuth();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
+    const [loginRole, setLoginRole] = useState<'farmer' | 'other'>('other');
     const [loginEmail, setLoginEmail] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
+    const [agristackId, setAgristackId] = useState('');
     const [registerData, setRegisterData] = useState({
         name: '',
         email: '',
@@ -87,12 +89,23 @@ const Login: React.FC = () => {
         e.preventDefault();
         setIsLoading(true);
         try {
-            await login(loginEmail, loginPassword);
-            toast({
-                title: 'Login Successful',
-                description: 'Welcome back!',
-            });
-            navigate(from);
+            if (loginRole === 'farmer') {
+                // Farmer login with AgriStack ID
+                await loginWithAgriStack(agristackId);
+                toast({
+                    title: 'Login Successful',
+                    description: 'Welcome, Farmer!',
+                });
+                navigate('/farmer');
+            } else {
+                // Regular login with email/password
+                await login(loginEmail, loginPassword);
+                toast({
+                    title: 'Login Successful',
+                    description: 'Welcome back!',
+                });
+                navigate(from);
+            }
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid credentials';
             toast({
@@ -139,7 +152,7 @@ const Login: React.FC = () => {
             <div className="w-full max-w-4xl">
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center gap-2 mb-4">
-                        <Leaf className="h-10 w-10 text-green-600" />
+                        <img src="/android-chrome-192x192.png" alt="TraceSafe Logo" className="h-12 w-12" />
                         <h1 className="text-4xl font-bold text-gray-900">TraceSafe</h1>
                     </div>
                     <p className="text-lg text-gray-600">Farm-to-Fork Traceability Platform</p>
@@ -190,29 +203,71 @@ const Login: React.FC = () => {
                                 <CardDescription>Enter your credentials to access your account</CardDescription>
                             </CardHeader>
                             <CardContent>
+                                <div className="space-y-4 mb-4">
+                                    <Label>Select Login Type</Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button
+                                            type="button"
+                                            variant={loginRole === 'farmer' ? 'default' : 'outline'}
+                                            className="flex items-center gap-2"
+                                            onClick={() => setLoginRole('farmer')}
+                                        >
+                                            <Tractor className="h-4 w-4" />
+                                            Farmer
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant={loginRole === 'other' ? 'default' : 'outline'}
+                                            className="flex items-center gap-2"
+                                            onClick={() => setLoginRole('other')}
+                                        >
+                                            <Shield className="h-4 w-4" />
+                                            Driver / Retailer / Admin
+                                        </Button>
+                                    </div>
+                                </div>
+
                                 <form onSubmit={handleLogin} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="email">Email</Label>
-                                        <Input
-                                            id="email"
-                                            type="email"
-                                            placeholder="you@example.com"
-                                            value={loginEmail}
-                                            onChange={(e) => setLoginEmail(e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="password">Password</Label>
-                                        <Input
-                                            id="password"
-                                            type="password"
-                                            placeholder="••••••••"
-                                            value={loginPassword}
-                                            onChange={(e) => setLoginPassword(e.target.value)}
-                                            required
-                                        />
-                                    </div>
+                                    {loginRole === 'farmer' ? (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="agristack-id">AgriStack Farmer ID</Label>
+                                            <Input
+                                                id="agristack-id"
+                                                placeholder="e.g., MH234567890121"
+                                                value={agristackId}
+                                                onChange={(e) => setAgristackId(e.target.value)}
+                                                required
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Enter your AgriStack Farmer ID from the registry
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="email">Email</Label>
+                                                <Input
+                                                    id="email"
+                                                    type="email"
+                                                    placeholder="you@example.com"
+                                                    value={loginEmail}
+                                                    onChange={(e) => setLoginEmail(e.target.value)}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="password">Password</Label>
+                                                <Input
+                                                    id="password"
+                                                    type="password"
+                                                    placeholder="••••••••"
+                                                    value={loginPassword}
+                                                    onChange={(e) => setLoginPassword(e.target.value)}
+                                                    required
+                                                />
+                                            </div>
+                                        </>
+                                    )}
                                     <Button type="submit" className="w-full" disabled={isLoading}>
                                         {isLoading ? 'Logging in...' : 'Login'}
                                     </Button>

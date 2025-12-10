@@ -8,6 +8,7 @@ import { uploadFile } from '../config/minio.js';
 import { getFabricService } from '../config/fabric.js';
 import { getIoTDefaults, getCropTypeEncoded } from '../config/iotConfig.js';
 import { getLocationTemperature } from '../services/weatherService.js';
+import { predictSpoilageRisk } from '../services/mlService.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -805,6 +806,34 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
         // Update farmer score (successful delivery)
         await updateFarmerScore(client, batch.farmer_id);
 
+        // Call ML API to predict spoilage risk
+        let spoilageRisk = null;
+        let spoilageProbability = null;
+        try {
+            const mlPrediction = await predictSpoilageRisk({
+                crate_temp: batch.crate_temp,
+                reefer_temp: batch.reefer_temp,
+                humidity: batch.humidity,
+                location_temp: batch.location_temp,
+                transit_duration: batch.transit_duration,
+                crop_type_encoded: batch.crop_type_encoded
+            });
+
+            if (mlPrediction) {
+                spoilageRisk = mlPrediction.prediction; // "High Risk" or "Low Risk"
+                spoilageProbability = mlPrediction.probabilities['High Risk'];
+                console.log(`🔬 ML Spoilage Prediction for ${batchId}: ${spoilageRisk} (${(spoilageProbability * 100).toFixed(1)}%)`);
+
+                // Update batch with spoilage prediction
+                await client.query(
+                    'UPDATE batches SET spoilage_risk = $1, spoilage_probability = $2 WHERE id = $3',
+                    [spoilageRisk, spoilageProbability, batch.id]
+                );
+            }
+        } catch (mlErr) {
+            console.log('⚠️ ML prediction failed (continuing without it):', mlErr.message);
+        }
+
         // Record on blockchain
         let blockchainTxId = null;
         let retries = 3;
@@ -843,6 +872,8 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
             batch_id: batchId,
             status: 'received',
             blockchain_tx_id: blockchainTxId,
+            spoilage_risk: spoilageRisk,
+            spoilage_probability: spoilageProbability
         });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -972,6 +1003,8 @@ router.get('/:batchId/journey', async (req, res) => {
                 },
                 qr_code_url: batch.qr_code_url,
                 created_at: batch.created_at,
+                spoilage_risk: batch.spoilage_risk,
+                spoilage_probability: batch.spoilage_probability,
             },
             farmer: {
                 name: batch.farmer_name,

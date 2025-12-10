@@ -171,7 +171,7 @@ const AdminDashboard: React.FC = () => {
             <header className="bg-gray-900 text-white shadow-lg">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <Shield className="h-8 w-8 text-red-500" />
+                        <img src="/android-chrome-192x192.png" alt="TraceSafe Logo" className="h-10 w-10" />
                         <div>
                             <h1 className="text-xl font-bold">Admin Dashboard</h1>
                             <p className="text-sm text-gray-400">TraceSafe Control Center</p>

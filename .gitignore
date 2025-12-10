@@ -140,5 +140,6 @@ fabric/chaincode/**/vendor/
 *.tx
 *.tar.gz
 fabric/wallets/
+fabric/wallets/farmerorg/Admin.id
 fabric/connection-profiles/
 database_export.json

@@ -43,6 +43,8 @@ interface BatchJourney {
         qr_code_url: string;
         created_at: string;
         blockchain_tx_id?: string;
+        spoilage_risk?: string;
+        spoilage_probability?: number;
     };
     farmer: {
         name: string;
@@ -197,7 +199,7 @@ const CustomerView: React.FC = () => {
                 <div className="max-w-4xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <Leaf className="h-6 w-6 text-green-600" />
+                            <img src="/android-chrome-192x192.png" alt="TraceSafe Logo" className="h-8 w-8" />
                             <span className="font-bold text-xl">TraceSafe</span>
                         </div>
                         <Button variant="outline" size="sm" onClick={handleShare}>
@@ -282,6 +284,57 @@ const CustomerView: React.FC = () => {
                                 </div>
                                 <p className="text-xs text-purple-500 mt-2">
                                     This batch is immutably recorded on a permissioned enterprise blockchain.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* ML Spoilage Risk Prediction */}
+                        {data.batch.spoilage_risk && (
+                            <div className={`mt-4 p-4 border rounded-lg ${data.batch.spoilage_risk === 'High Risk'
+                                ? 'bg-red-50 border-red-200'
+                                : 'bg-green-50 border-green-200'
+                                }`}>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Thermometer className={`h-5 w-5 ${data.batch.spoilage_risk === 'High Risk'
+                                        ? 'text-red-600'
+                                        : 'text-green-600'
+                                        }`} />
+                                    <span className={`font-semibold ${data.batch.spoilage_risk === 'High Risk'
+                                        ? 'text-red-800'
+                                        : 'text-green-800'
+                                        }`}>FSSAI Risk Assessment</span>
+                                    <Badge className={`${data.batch.spoilage_risk === 'High Risk'
+                                        ? 'bg-red-600'
+                                        : 'bg-green-600'
+                                        } text-white text-xs`}>
+                                        {data.batch.spoilage_risk}
+                                    </Badge>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                        <p className={data.batch.spoilage_risk === 'High Risk' ? 'text-red-600' : 'text-green-600'}>
+                                            Risk Level
+                                        </p>
+                                        <p className="font-mono text-xs">{data.batch.spoilage_risk}</p>
+                                    </div>
+                                    <div>
+                                        <p className={data.batch.spoilage_risk === 'High Risk' ? 'text-red-600' : 'text-green-600'}>
+                                            Confidence
+                                        </p>
+                                        <p className="font-mono text-xs">
+                                            {data.batch.spoilage_probability
+                                                ? `${(data.batch.spoilage_probability * 100).toFixed(1)}%`
+                                                : 'N/A'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p className={`text-xs mt-2 ${data.batch.spoilage_risk === 'High Risk'
+                                    ? 'text-red-500'
+                                    : 'text-green-500'
+                                    }`}>
+                                    {data.batch.spoilage_risk === 'High Risk'
+                                        ? '⚠️ This batch shows elevated spoilage risk based on cold chain monitoring data. Consume with caution.'
+                                        : '✓ This batch was maintained under optimal cold chain conditions.'}
                                 </p>
                             </div>
                         )}

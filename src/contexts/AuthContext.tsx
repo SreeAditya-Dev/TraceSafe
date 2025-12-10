@@ -28,6 +28,7 @@ interface AuthContextType {
     isLoading: boolean;
     isAuthenticated: boolean;
     login: (email: string, password: string) => Promise<void>;
+    loginWithAgriStack: (agristackId: string) => Promise<void>;
     quickLogin: (role: string, name?: string) => Promise<void>;
     register: (data: { email: string; password: string; name: string; role: string; phone?: string }) => Promise<void>;
     logout: () => void;
@@ -67,6 +68,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const login = async (email: string, password: string) => {
         const response = await authAPI.login({ email, password });
+        const { user: userData, token: authToken } = response.data;
+
+        setUser(userData);
+        setToken(authToken);
+        localStorage.setItem('token', authToken);
+        localStorage.setItem('user', JSON.stringify(userData));
+
+        await refreshProfile();
+    };
+
+    const loginWithAgriStack = async (agristackId: string) => {
+        const response = await authAPI.loginWithAgriStack({ agristackId });
         const { user: userData, token: authToken } = response.data;
 
         setUser(userData);
@@ -124,6 +137,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 isLoading,
                 isAuthenticated: !!user && !!token,
                 login,
+                loginWithAgriStack,
                 quickLogin,
                 register,
                 logout,

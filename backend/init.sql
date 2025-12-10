@@ -109,6 +109,9 @@ CREATE TABLE batches (
     pending_retailer_id UUID,
     delivery_latitude DECIMAL(10, 8),
     delivery_longitude DECIMAL(11, 8),
+    -- ML Spoilage prediction columns
+    spoilage_risk VARCHAR(20),
+    spoilage_probability DECIMAL(5, 4),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

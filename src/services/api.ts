@@ -39,6 +39,9 @@ export const authAPI = {
     login: (data: { email: string; password: string }) =>
         api.post('/api/auth/login', data),
 
+    loginWithAgriStack: (data: { agristackId: string }) =>
+        api.post('/api/auth/agristack-login', data),
+
     quickLogin: (data: { role: string; name?: string }) =>
         api.post('/api/auth/quick-login', data),
 

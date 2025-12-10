@@ -103,6 +103,86 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// AgriStack Farmer ID Login (farmers login with their AgriStack ID)
+router.post('/agristack-login', async (req, res) => {
+    try {
+        const { agristackId } = req.body;
+
+        if (!agristackId) {
+            return res.status(400).json({ error: 'AgriStack Farmer ID required' });
+        }
+
+        // Check if farmer exists in AgriStack registry
+        const agristackResult = await query(
+            'SELECT * FROM agristack_farmers WHERE farmer_id = $1',
+            [agristackId]
+        );
+
+        if (agristackResult.rows.length === 0) {
+            return res.status(401).json({ error: 'AgriStack Farmer ID not found in registry' });
+        }
+
+        const agristackFarmer = agristackResult.rows[0];
+
+        // Find or create farmer account
+        let farmerResult = await query(
+            'SELECT * FROM farmers WHERE agristack_id = $1',
+            [agristackId]
+        );
+
+        let farmer;
+        if (farmerResult.rows.length === 0) {
+            // Create farmer account from AgriStack data
+            const passwordHash = await bcrypt.hash(agristackId, 10); // Use AgriStack ID as password
+
+            // Create user
+            const userResult = await query(
+                `INSERT INTO users (email, password_hash, name, role) 
+                 VALUES ($1, $2, $3, $4) 
+                 RETURNING *`,
+                [`${agristackId}@agristack.local`, passwordHash, agristackFarmer.name, 'farmer']
+            );
+            const user = userResult.rows[0];
+
+            // Create farmer profile
+            farmerResult = await query(
+                `INSERT INTO farmers (user_id, name, agristack_id, verified, phone) 
+                 VALUES ($1, $2, $3, $4, $5) 
+                 RETURNING *`,
+                [user.id, agristackFarmer.name, agristackId, agristackFarmer.verified, '']
+            );
+            farmer = farmerResult.rows[0];
+        } else {
+            farmer = farmerResult.rows[0];
+        }
+
+        // Get user account
+        const userResult = await query(
+            'SELECT * FROM users WHERE id = (SELECT user_id FROM farmers WHERE id = $1)',
+            [farmer.id]
+        );
+        const user = userResult.rows[0];
+
+        // Generate token
+        const token = jwt.sign({ userId: user.id, role: 'farmer' }, JWT_SECRET, { expiresIn: '7d' });
+
+        res.json({
+            message: 'AgriStack login successful',
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                phone: user.phone,
+            },
+            token,
+        });
+    } catch (err) {
+        console.error('AgriStack login error:', err);
+        res.status(500).json({ error: 'Login failed', details: err.message });
+    }
+});
+
 // Quick login (for demo - select role without password)
 router.post('/quick-login', async (req, res) => {
     try {
