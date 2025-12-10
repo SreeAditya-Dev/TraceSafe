@@ -59,20 +59,17 @@ const Login: React.FC = () => {
     const handleQuickLogin = async (role: string) => {
         setIsLoading(true);
         try {
-            await quickLogin(role);
+            const user = await quickLogin(role);
             toast({
                 title: 'Login Successful',
-                description: `Logged in as ${role}`,
+                description: `Welcome back, ${user.name}!`,
             });
 
-            // Navigate based on role
-            const routes: Record<string, string> = {
-                farmer: '/farmer',
-                driver: '/driver',
-                retailer: '/retailer',
-                admin: '/admin',
-            };
-            navigate(routes[role] || '/');
+            if (from === '/') {
+                navigate(`/${user.role}`);
+            } else {
+                navigate(from);
+            }
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Login failed';
             toast({
@@ -89,21 +86,31 @@ const Login: React.FC = () => {
         e.preventDefault();
         setIsLoading(true);
         try {
+            let user;
             if (loginRole === 'farmer') {
                 // Farmer login with AgriStack ID
-                await loginWithAgriStack(agristackId);
+                user = await loginWithAgriStack(agristackId);
                 toast({
                     title: 'Login Successful',
                     description: 'Welcome, Farmer!',
                 });
-                navigate('/farmer');
             } else {
                 // Regular login with email/password
-                await login(loginEmail, loginPassword);
+                user = await login(loginEmail, loginPassword);
                 toast({
                     title: 'Login Successful',
                     description: 'Welcome back!',
                 });
+            }
+
+            if (from === '/') {
+                // Redirect to role-specific dashboard if coming from home
+                if (user.role === 'admin') navigate('/admin');
+                else if (user.role === 'farmer') navigate('/farmer');
+                else if (user.role === 'driver') navigate('/driver');
+                else if (user.role === 'retailer') navigate('/retailer');
+                else navigate('/');
+            } else {
                 navigate(from);
             }
         } catch (error: unknown) {

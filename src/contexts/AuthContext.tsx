@@ -27,9 +27,9 @@ interface AuthContextType {
     token: string | null;
     isLoading: boolean;
     isAuthenticated: boolean;
-    login: (email: string, password: string) => Promise<void>;
-    loginWithAgriStack: (agristackId: string) => Promise<void>;
-    quickLogin: (role: string, name?: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<User>;
+    loginWithAgriStack: (agristackId: string) => Promise<User>;
+    quickLogin: (role: string, name?: string) => Promise<User>;
     register: (data: { email: string; password: string; name: string; role: string; phone?: string }) => Promise<void>;
     logout: () => void;
     refreshProfile: () => Promise<void>;
@@ -76,6 +76,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('user', JSON.stringify(userData));
 
         await refreshProfile();
+        return userData;
     };
 
     const loginWithAgriStack = async (agristackId: string) => {
@@ -88,6 +89,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('user', JSON.stringify(userData));
 
         await refreshProfile();
+        return userData;
     };
 
     const quickLogin = async (role: string, name?: string) => {
@@ -100,6 +102,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('user', JSON.stringify(userData));
 
         await refreshProfile();
+        return userData;
     };
 
     const register = async (data: { email: string; password: string; name: string; role: string; phone?: string }) => {

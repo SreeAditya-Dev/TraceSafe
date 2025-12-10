@@ -39,6 +39,21 @@ router.post('/register', async (req, res) => {
 
         const user = result.rows[0];
 
+        // Create role-specific profile
+        if (role === 'retailer') {
+            await query(
+                `INSERT INTO retailers (user_id, name, phone, shop_name) 
+                 VALUES ($1, $2, $3, $4)`,
+                [user.id, name, phone, `${name}'s Shop`]
+            );
+        } else if (role === 'driver') {
+            await query(
+                `INSERT INTO drivers (user_id, name, phone) 
+                 VALUES ($1, $2, $3)`,
+                [user.id, name, phone]
+            );
+        }
+
         // Generate token
         const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
