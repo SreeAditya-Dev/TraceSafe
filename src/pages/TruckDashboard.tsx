@@ -342,60 +342,32 @@ const TruckDashboard: React.FC = () => {
                             {scannedBatch.status === 'in_transit' && (
                                 <>
                                     <div className="border-t pt-4">
-                                        <h4 className="font-medium mb-3">Update Transit Conditions</h4>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label className="flex items-center gap-1">
-                                                    <Thermometer className="h-4 w-4" />
-                                                    Temperature (°C)
-                                                </Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="25"
-                                                    value={transitForm.temperature}
-                                                    onChange={(e) => setTransitForm({ ...transitForm, temperature: e.target.value })}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="flex items-center gap-1">
-                                                    <Droplets className="h-4 w-4" />
-                                                    Humidity (%)
-                                                </Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="60"
-                                                    value={transitForm.humidity}
-                                                    onChange={(e) => setTransitForm({ ...transitForm, humidity: e.target.value })}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2 mt-4">
-                                            <Label>Notes</Label>
-                                            <Textarea
-                                                placeholder="Any observations..."
-                                                value={transitForm.notes}
-                                                onChange={(e) => setTransitForm({ ...transitForm, notes: e.target.value })}
-                                            />
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                            <h4 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
+                                                <Thermometer className="h-4 w-4" />
+                                                IoT Monitoring Active
+                                            </h4>
+                                            <p className="text-sm text-blue-700">
+                                                Temperature, humidity, and location data is being automatically tracked by IoT sensors.
+                                            </p>
                                         </div>
 
                                         <div className="space-y-2 mt-4">
-                                            <Label>Evidence Photo</Label>
+                                            <Label>Delivery Evidence Photo (Optional)</Label>
                                             <CameraInput
                                                 onCapture={setEvidenceImage}
-                                                label="Take Status/Delivery Photo"
+                                                label="Take Delivery Photo"
                                             />
                                         </div>
 
-                                        <div className="flex gap-2 mt-4">
-                                            <Button onClick={handleTransitUpdate} variant="outline" className="flex-1" disabled={isUpdating}>
-                                                <Send className="h-4 w-4 mr-2" />
-                                                Update Transit
-                                            </Button>
-                                            <Button onClick={handleDeliver} className="flex-1 bg-purple-600 hover:bg-purple-700" disabled={isUpdating}>
-                                                <Package className="h-4 w-4 mr-2" />
-                                                Mark Delivered
-                                            </Button>
-                                        </div>
+                                        <Button
+                                            onClick={handleDeliver}
+                                            className="w-full mt-4 bg-purple-600 hover:bg-purple-700"
+                                            disabled={isUpdating}
+                                        >
+                                            <Package className="h-4 w-4 mr-2" />
+                                            {isUpdating ? 'Processing...' : 'Mark as Delivered'}
+                                        </Button>
                                     </div>
 
                                     {/* Route Map Visualization */}

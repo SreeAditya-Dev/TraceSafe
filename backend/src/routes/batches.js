@@ -6,6 +6,8 @@ import { query, getClient } from '../config/database.js';
 import { authenticate, requireRole, optionalAuth } from '../middleware/auth.js';
 import { uploadFile } from '../config/minio.js';
 import { getFabricService } from '../config/fabric.js';
+import { getIoTDefaults, getCropTypeEncoded } from '../config/iotConfig.js';
+import { getLocationTemperature } from '../services/weatherService.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -149,21 +151,28 @@ router.post('/', authenticate, requireRole('farmer'), upload.any(), async (req, 
         const qrBuffer = Buffer.from(qrCodeDataUrl.split(',')[1], 'base64');
         const { url: qrUrl } = await uploadFile(`qr-${batchId}.png`, qrBuffer, 'image/png');
 
-        // Create batch
+        // Get IoT defaults for this crop type
+        const iotDefaults = getIoTDefaults(crop);
+        const cropTypeEncoded = getCropTypeEncoded(crop);
+        console.log(`🌡️ IoT Defaults for ${crop}: crate=${iotDefaults.crate_temp}°C, reefer=${iotDefaults.reefer_temp}°C, humidity=${iotDefaults.humidity}%`);
+
+        // Create batch with IoT defaults
         const result = await client.query(
             `INSERT INTO batches (
         batch_id, crop, variety, quantity, unit, harvest_date, farmer_id,
         current_owner_type, current_owner_id, status,
         origin_latitude, origin_longitude, origin_address,
-        qr_code_url, image_urls
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        qr_code_url, image_urls,
+        crate_temp, reefer_temp, humidity, crop_type_encoded
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *`,
             [
                 batchId, crop, variety || null, parseFloat(quantity), unit || 'kg',
                 harvestDate || new Date(), farmer.id,
                 'farmer', farmer.id, 'created',
                 parseFloat(latitude) || null, parseFloat(longitude) || null, address || null,
-                qrUrl, imageUrls.length > 0 ? imageUrls : null
+                qrUrl, imageUrls.length > 0 ? imageUrls : null,
+                iotDefaults.crate_temp, iotDefaults.reefer_temp, iotDefaults.humidity, cropTypeEncoded
             ]
         );
 
@@ -479,15 +488,28 @@ router.post('/:batchId/pickup', authenticate, requireRole('driver'), upload.any(
 
         const batch = batchCheck.rows[0];
 
-        // Update batch status
+        // Fetch location temperature from OpenWeather API
+        let locationTemp = batch.location_temp || 22.0;
+        try {
+            if (latitude && longitude) {
+                locationTemp = await getLocationTemperature(parseFloat(latitude), parseFloat(longitude));
+                console.log(`🌡️ Location temp for pickup: ${locationTemp}°C`);
+            }
+        } catch (weatherErr) {
+            console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', weatherErr.message);
+        }
+
+        // Update batch status with transit_start_time and location_temp
         const batchResult = await client.query(
             `UPDATE batches
             SET status = 'in_transit',
                 current_owner_type = 'driver',
-                current_owner_id = $1
+                current_owner_id = $1,
+                transit_start_time = NOW(),
+                location_temp = $3
             WHERE batch_id = $2
             RETURNING *`,
-            [driver.id, batchId]
+            [driver.id, batchId, locationTemp]
         );
 
         // Create transfer record
@@ -519,12 +541,15 @@ router.post('/:batchId/pickup', authenticate, requireRole('driver'), upload.any(
         try {
             const fabricService = await tryConnectFabric('driver');
             if (fabricService) {
+                // Append IoT data to notes for blockchain immutability
+                const blockchainNotes = `${notes || ''} | IoT: Location Temp ${locationTemp}°C`.trim();
+
                 const fabricResult = await fabricService.recordPickup(
                     batchId,
                     driver.name,
                     parseFloat(latitude) || 0,
                     parseFloat(longitude) || 0,
-                    notes || ''
+                    blockchainNotes
                 );
                 blockchainTxId = fabricResult.txId;
                 console.log(`✅ Pickup ${batchId} recorded on blockchain: ${blockchainTxId}`);
@@ -587,10 +612,23 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
             imageUrls.push(url);
         }
 
-        // Update batch
+        // Calculate transit duration in hours
+        let transitDuration = null;
+        if (batch.transit_start_time) {
+            const startTime = new Date(batch.transit_start_time);
+            const endTime = new Date();
+            transitDuration = Math.round((endTime - startTime) / (1000 * 60 * 60)); // hours
+            console.log(`⏱️ Transit duration for ${batchId}: ${transitDuration} hours`);
+        }
+
+        // Update batch with transit_end_time and duration
         await client.query(
-            `UPDATE batches SET status = 'delivered' WHERE id = $1`,
-            [batch.id]
+            `UPDATE batches SET 
+                status = 'delivered', 
+                transit_end_time = NOW(),
+                transit_duration = $2
+            WHERE id = $1`,
+            [batch.id, transitDuration]
         );
 
         // Create journey event
@@ -609,13 +647,16 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
         try {
             const fabricService = await tryConnectFabric('driver');
             if (fabricService) {
+                // Append IoT data to notes for blockchain immutability
+                const blockchainNotes = `${notes || ''} | IoT: Transit Duration ${transitDuration || 0}h`.trim();
+
                 const fabricResult = await fabricService.recordDelivery(
                     batchId,
                     driver.name,
                     '',  // retailerName not available here
                     parseFloat(latitude) || 0,
                     parseFloat(longitude) || 0,
-                    notes || ''
+                    blockchainNotes
                 );
                 blockchainTxId = fabricResult.txId;
                 console.log(`✅ Delivery ${batchId} recorded on blockchain: ${blockchainTxId}`);
@@ -700,21 +741,33 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
 
         // Record on blockchain
         let blockchainTxId = null;
-        try {
-            const fabricService = await tryConnectFabric('retailer');
-            if (fabricService) {
-                const fabricResult = await fabricService.recordReceipt(
-                    batchId,
-                    retailer.name,
-                    parseFloat(latitude) || 0,
-                    parseFloat(longitude) || 0,
-                    notes || ''
-                );
-                blockchainTxId = fabricResult.txId;
-                console.log(`✅ Receipt ${batchId} recorded on blockchain: ${blockchainTxId}`);
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                const fabricService = await tryConnectFabric('retailer');
+                if (fabricService) {
+                    const fabricResult = await fabricService.recordReceipt(
+                        batchId,
+                        retailer.name,
+                        parseFloat(latitude) || 0,
+                        parseFloat(longitude) || 0,
+                        notes || ''
+                    );
+                    blockchainTxId = fabricResult.txId;
+                    console.log(`✅ Receipt ${batchId} recorded on blockchain: ${blockchainTxId}`);
+                    break; // Success, exit loop
+                } else {
+                    console.log('⚠️ Fabric service not available, retrying...');
+                }
+            } catch (fabricErr) {
+                console.log(`⚠️ Blockchain write failed (attempt ${4 - retries}/3):`, fabricErr.message);
+                if (retries === 1) {
+                    console.log('❌ Giving up on blockchain write after 3 attempts');
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+                }
             }
-        } catch (fabricErr) {
-            console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', fabricErr.message);
+            retries--;
         }
 
         await client.query('COMMIT');
