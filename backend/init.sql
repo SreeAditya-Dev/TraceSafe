@@ -42,6 +42,7 @@ CREATE TABLE farmers (
     land_acres DECIMAL(10, 2),
     crops TEXT[],
     verified BOOLEAN DEFAULT FALSE,
+    fssai_license VARCHAR(50),
     profile_image_url TEXT,
     reliability_score DECIMAL(5, 2) DEFAULT 100.0,
     total_batches INTEGER DEFAULT 0,
@@ -95,6 +96,7 @@ CREATE TABLE batches (
     origin_address TEXT,
     qr_code_url TEXT,
     image_urls TEXT[],
+    fssai_license VARCHAR(50),
     blockchain_tx_id VARCHAR(255),
     -- IoT columns
     crate_temp DECIMAL(5, 2),

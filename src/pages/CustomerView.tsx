@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-    Leaf, Truck, Store, ShoppingCart, MapPin,
-    Thermometer, Droplets, CheckCircle, Clock, Share2, ArrowLeft, Box
+    Leaf, Truck, Store, ShoppingCart, MapPin, Calendar, User, Package, Clock, CheckCircle, AlertTriangle, Share2, Shield, ArrowLeft, Box, Thermometer, Droplets
 } from 'lucide-react';
 import { RouteMap } from '@/components/RouteMap';
 
@@ -45,6 +44,8 @@ interface BatchJourney {
         blockchain_tx_id?: string;
         spoilage_risk?: string;
         spoilage_probability?: number;
+        fssai_license?: string;
+        farmer_license?: string;
     };
     farmer: {
         name: string;
@@ -255,6 +256,24 @@ const CustomerView: React.FC = () => {
                             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
                                 <CheckCircle className="h-5 w-5 text-green-600" />
                                 <span className="text-green-800 font-medium">Verified via AgriStack Registry</span>
+                            </div>
+                        )}
+
+                        {/* Additional Batch Details (Origin Address, FSSAI) */}
+                        {(data.batch.origin.address || data.batch.fssai_license || data.batch.farmer_license) && (
+                            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                                {data.batch.origin.address && (
+                                    <div className="flex items-center gap-2 text-gray-600">
+                                        <MapPin className="h-4 w-4" />
+                                        <span>{data.batch.origin.address || 'Location not available'}</span>
+                                    </div>
+                                )}
+                                {(data.batch.fssai_license || data.batch.farmer_license) && (
+                                    <div className="flex items-center gap-2 text-gray-600">
+                                        <Shield className="h-4 w-4 text-blue-600" />
+                                        <span>FSSAI Lic: {data.batch.fssai_license || data.batch.farmer_license}</span>
+                                    </div>
+                                )}
                             </div>
                         )}
 

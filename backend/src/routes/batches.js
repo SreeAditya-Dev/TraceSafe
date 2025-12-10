@@ -106,7 +106,7 @@ router.post('/', authenticate, requireRole('farmer'), upload.any(), async (req, 
     const client = await getClient();
     try {
         await client.query('BEGIN');
-        const { crop, variety, quantity, unit, harvestDate, latitude, longitude, address } = req.body;
+        const { crop, variety, quantity, unit, harvestDate, latitude, longitude, address, fssaiLicense } = req.body;
 
         if (!crop || !quantity) {
             await client.query('ROLLBACK');
@@ -164,8 +164,8 @@ router.post('/', authenticate, requireRole('farmer'), upload.any(), async (req, 
         current_owner_type, current_owner_id, status,
         origin_latitude, origin_longitude, origin_address,
         qr_code_url, image_urls,
-        crate_temp, reefer_temp, humidity, crop_type_encoded
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        crate_temp, reefer_temp, humidity, crop_type_encoded, fssai_license
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *`,
             [
                 batchId, crop, variety || null, parseFloat(quantity), unit || 'kg',
@@ -173,7 +173,8 @@ router.post('/', authenticate, requireRole('farmer'), upload.any(), async (req, 
                 'farmer', farmer.id, 'created',
                 parseFloat(latitude) || null, parseFloat(longitude) || null, address || null,
                 qrUrl, imageUrls.length > 0 ? imageUrls : null,
-                iotDefaults.crate_temp, iotDefaults.reefer_temp, iotDefaults.humidity, cropTypeEncoded
+                iotDefaults.crate_temp, iotDefaults.reefer_temp, iotDefaults.humidity, cropTypeEncoded,
+                fssaiLicense || farmer.fssai_license || null
             ]
         );
 
@@ -351,7 +352,7 @@ router.get('/:batchId', optionalAuth, async (req, res) => {
         const { batchId } = req.params;
 
         const result = await query(
-            `SELECT b.*, f.name as farmer_name, f.agristack_id, f.district, f.state
+            `SELECT b.*, f.name as farmer_name, f.agristack_id, f.district, f.state, f.fssai_license as farmer_license
        FROM batches b
        LEFT JOIN farmers f ON b.farmer_id = f.id
        WHERE b.batch_id = $1`,

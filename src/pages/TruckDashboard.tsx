@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
     Truck, QrCode, MapPin, Package, Thermometer,
-    Droplets, LogOut, Camera, Send, Navigation
+    Droplets, LogOut, Camera, Send, Navigation, User
 } from 'lucide-react';
 import {
     Dialog,
@@ -267,15 +267,20 @@ const TruckDashboard: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        {location && (
-                            <Badge className="bg-blue-800">
-                                <Navigation className="h-3 w-3 mr-1" />
-                                GPS Active
-                            </Badge>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-blue-700">
-                            <LogOut className="h-4 w-4 mr-2" />
-                            Logout
+                        <Button variant="ghost" onClick={() => navigate('/profile')}>
+                            My Profile
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <div className="bg-blue-100 p-2 rounded-full">
+                                <User className="h-6 w-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="font-semibold">{user?.name}</p>
+                                <p className="text-xs text-gray-500">Driver</p>
+                            </div>
+                        </div>
+                        <Button variant="outline" size="icon" onClick={logout}>
+                            <LogOut className="h-4 w-4" />
                         </Button>
                     </div>
                 </div>

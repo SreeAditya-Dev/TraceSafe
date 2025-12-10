@@ -280,13 +280,79 @@ router.get('/me', authenticate, async (req, res) => {
                 name: user.name,
                 role: user.role,
                 phone: user.phone,
-                created_at: user.created_at,
             },
             profile: profileData,
         });
     } catch (err) {
         console.error('Get profile error:', err);
         res.status(500).json({ error: 'Failed to get profile', details: err.message });
+    }
+});
+
+// Update user profile
+router.put('/profile', authenticate, async (req, res) => {
+    try {
+        const user = req.user;
+        const { name, phone, fssaiLicense, shopName, vehicleNumber, licenseNumber } = req.body;
+
+        // Update base user info
+        await query(
+            'UPDATE users SET name = COALESCE($1, name), phone = COALESCE($2, phone) WHERE id = $3',
+            [name, phone, user.id]
+        );
+
+        let profileData = null;
+
+        // Update role-specific profile
+        if (user.role === 'farmer') {
+            const result = await query(
+                `UPDATE farmers 
+                 SET name = COALESCE($1, name), 
+                     phone = COALESCE($2, phone),
+                     fssai_license = COALESCE($3, fssai_license)
+                 WHERE user_id = $4 
+                 RETURNING *`,
+                [name, phone, fssaiLicense, user.id]
+            );
+            profileData = result.rows[0];
+        } else if (user.role === 'driver') {
+            const result = await query(
+                `UPDATE drivers 
+                 SET name = COALESCE($1, name), 
+                     phone = COALESCE($2, phone),
+                     vehicle_number = COALESCE($3, vehicle_number),
+                     license_number = COALESCE($4, license_number)
+                 WHERE user_id = $5 
+                 RETURNING *`,
+                [name, phone, vehicleNumber, licenseNumber, user.id]
+            );
+            profileData = result.rows[0];
+        } else if (user.role === 'retailer') {
+            const result = await query(
+                `UPDATE retailers 
+                 SET name = COALESCE($1, name), 
+                     phone = COALESCE($2, phone),
+                     shop_name = COALESCE($3, shop_name),
+                     fssai_license = COALESCE($4, fssai_license)
+                 WHERE user_id = $5 
+                 RETURNING *`,
+                [name, phone, shopName, fssaiLicense, user.id]
+            );
+            profileData = result.rows[0];
+        }
+
+        res.json({
+            message: 'Profile updated successfully',
+            user: {
+                ...user,
+                name: name || user.name,
+                phone: phone || user.phone,
+            },
+            profile: profileData,
+        });
+    } catch (err) {
+        console.error('Update profile error:', err);
+        res.status(500).json({ error: 'Failed to update profile', details: err.message });
     }
 });
 

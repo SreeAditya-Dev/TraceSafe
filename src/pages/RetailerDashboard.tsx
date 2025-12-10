@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
     Store, QrCode, MapPin, Package, CheckCircle,
-    LogOut, Camera, ShoppingCart, Eye
+    LogOut, Camera, ShoppingCart, Eye, User
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -177,10 +177,23 @@ const RetailerDashboard: React.FC = () => {
                             <p className="text-sm text-purple-100">Welcome, {user?.name}</p>
                         </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-purple-700">
-                        <LogOut className="h-4 w-4 mr-2" />
-                        Logout
-                    </Button>
+                    <div className="flex items-center gap-4">
+                        <Button variant="ghost" onClick={() => navigate('/profile')}>
+                            My Profile
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <div className="bg-purple-100 p-2 rounded-full">
+                                <User className="h-6 w-6 text-purple-600" />
+                            </div>
+                            <div>
+                                <p className="font-semibold">{user?.name}</p>
+                                <p className="text-xs text-gray-500">Retailer</p>
+                            </div>
+                        </div>
+                        <Button variant="outline" size="icon" onClick={handleLogout}>
+                            <LogOut className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </header>
 

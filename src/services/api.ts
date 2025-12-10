@@ -47,6 +47,9 @@ export const authAPI = {
 
     getProfile: () =>
         api.get('/api/auth/me'),
+
+    updateProfile: (data: any) =>
+        api.put('/api/auth/profile', data),
 };
 
 // AgriStack endpoints
