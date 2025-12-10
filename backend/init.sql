@@ -43,6 +43,9 @@ CREATE TABLE farmers (
     crops TEXT[],
     verified BOOLEAN DEFAULT FALSE,
     profile_image_url TEXT,
+    reliability_score DECIMAL(5, 2) DEFAULT 100.0,
+    total_batches INTEGER DEFAULT 0,
+    successful_batches INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -93,6 +96,19 @@ CREATE TABLE batches (
     qr_code_url TEXT,
     image_urls TEXT[],
     blockchain_tx_id VARCHAR(255),
+    -- IoT columns
+    crate_temp DECIMAL(5, 2),
+    reefer_temp DECIMAL(5, 2),
+    humidity DECIMAL(5, 2),
+    location_temp DECIMAL(5, 2),
+    transit_duration INTEGER,
+    crop_type_encoded INTEGER,
+    transit_start_time TIMESTAMP,
+    transit_end_time TIMESTAMP,
+    -- Delivery tracking columns
+    pending_retailer_id UUID,
+    delivery_latitude DECIMAL(10, 8),
+    delivery_longitude DECIMAL(11, 8),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

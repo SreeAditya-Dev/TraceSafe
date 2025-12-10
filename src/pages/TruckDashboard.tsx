@@ -36,6 +36,14 @@ interface Batch {
     created_at: string;
 }
 
+interface Retailer {
+    id: string;
+    name: string;
+    shop_name: string;
+    phone: string;
+    address: string;
+}
+
 const TruckDashboard: React.FC = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
@@ -43,6 +51,8 @@ const TruckDashboard: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     const [batches, setBatches] = useState<Batch[]>([]);
+    const [retailers, setRetailers] = useState<Retailer[]>([]);
+    const [selectedRetailerId, setSelectedRetailerId] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [showScanner, setShowScanner] = useState(false);
     const [scannedBatch, setScannedBatch] = useState<Batch | null>(null);
@@ -65,10 +75,14 @@ const TruckDashboard: React.FC = () => {
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const response = await batchAPI.getAll({ status: 'in_transit' });
-            setBatches(response.data.batches || []);
+            const [batchesRes, retailersRes] = await Promise.all([
+                batchAPI.getAll({ status: 'in_transit' }),
+                batchAPI.getRetailers()
+            ]);
+            setBatches(batchesRes.data.batches || []);
+            setRetailers(retailersRes.data.retailers || []);
         } catch (error) {
-            console.error('Failed to load batches:', error);
+            console.error('Failed to load data:', error);
         } finally {
             setIsLoading(false);
         }
@@ -172,11 +186,21 @@ const TruckDashboard: React.FC = () => {
     const handleDeliver = async () => {
         if (!scannedBatch) return;
 
+        if (!selectedRetailerId) {
+            toast({
+                title: 'Select Retailer',
+                description: 'You must select a retailer to deliver to',
+                variant: 'destructive',
+            });
+            return;
+        }
+
         setIsUpdating(true);
         try {
             const formData = new FormData();
             formData.append('latitude', location.lat || '0');
             formData.append('longitude', location.lng || '0');
+            formData.append('retailerId', selectedRetailerId);
             formData.append('notes', 'Delivered to destination');
 
             if (evidenceImage) {
@@ -194,6 +218,7 @@ const TruckDashboard: React.FC = () => {
 
             loadData();
             setScannedBatch(null);
+            setSelectedRetailerId('');
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Delivery failed';
             toast({
@@ -360,10 +385,33 @@ const TruckDashboard: React.FC = () => {
                                             />
                                         </div>
 
+                                        {/* Retailer Selection - Required */}
+                                        <div className="space-y-2 mt-4">
+                                            <Label className="flex items-center gap-1">
+                                                <Package className="h-4 w-4" />
+                                                Select Retailer <span className="text-red-500">*</span>
+                                            </Label>
+                                            <select
+                                                className="w-full p-2 border rounded-md bg-white"
+                                                value={selectedRetailerId}
+                                                onChange={(e) => setSelectedRetailerId(e.target.value)}
+                                            >
+                                                <option value="">-- Choose a retailer --</option>
+                                                {retailers.map((r) => (
+                                                    <option key={r.id} value={r.id}>
+                                                        {r.name} {r.shop_name ? `(${r.shop_name})` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {retailers.length === 0 && (
+                                                <p className="text-sm text-orange-600">No retailers registered yet</p>
+                                            )}
+                                        </div>
+
                                         <Button
                                             onClick={handleDeliver}
                                             className="w-full mt-4 bg-purple-600 hover:bg-purple-700"
-                                            disabled={isUpdating}
+                                            disabled={isUpdating || !selectedRetailerId}
                                         >
                                             <Package className="h-4 w-4 mr-2" />
                                             {isUpdating ? 'Processing...' : 'Mark as Delivered'}

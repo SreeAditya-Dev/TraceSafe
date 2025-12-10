@@ -100,6 +100,9 @@ export const batchAPI = {
 
     getJourney: (batchId: string) =>
         api.get(`/api/batches/${batchId}/journey`),
+
+    getRetailers: () =>
+        api.get('/api/batches/retailers'),
 };
 
 // Media endpoints

@@ -1,5 +1,5 @@
 // Weather Service - Fetch location temperature from OpenWeather API
-const axios = require('axios');
+import axios from 'axios';
 
 // OpenWeather API - Free tier key (replace with your own for production)
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY || '4d8fb5b93d4af21d66a2948710284366';
@@ -11,7 +11,7 @@ const OPENWEATHER_BASE_URL = 'https://api.openweathermap.org/data/2.5/weather';
  * @param {number} lng - Longitude
  * @returns {Promise<number>} Temperature in Celsius
  */
-async function getLocationTemperature(lat, lng) {
+export async function getLocationTemperature(lat, lng) {
     try {
         if (!lat || !lng || lat === 0 || lng === 0) {
             console.log('[Weather] Invalid coordinates, using default temp');
@@ -43,7 +43,7 @@ async function getLocationTemperature(lat, lng) {
  * @param {number} lng - Longitude
  * @returns {Promise<object>} Weather data
  */
-async function getWeatherInfo(lat, lng) {
+export async function getWeatherInfo(lat, lng) {
     try {
         if (!lat || !lng || lat === 0 || lng === 0) {
             return {
@@ -81,8 +81,3 @@ async function getWeatherInfo(lat, lng) {
         };
     }
 }
-
-module.exports = {
-    getLocationTemperature,
-    getWeatherInfo
-};

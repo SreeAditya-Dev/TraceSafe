@@ -121,7 +121,7 @@ function getCropNameFromCode(code) {
     return CROP_TYPE_DECODE[code] || 'unknown';
 }
 
-module.exports = {
+export {
     CROP_TYPE_ENCODING,
     CROP_TYPE_DECODE,
     IOT_DEFAULTS,

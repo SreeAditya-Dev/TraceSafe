@@ -256,6 +256,26 @@ router.post('/', authenticate, requireRole('farmer'), upload.any(), async (req, 
     }
 });
 
+// Get all retailers (for driver delivery dropdown)
+router.get('/retailers', authenticate, requireRole('driver', 'admin'), async (req, res) => {
+    try {
+        const result = await query(
+            `SELECT r.id, r.name, r.shop_name, r.phone, r.address, r.latitude, r.longitude
+             FROM retailers r
+             JOIN users u ON r.user_id = u.id
+             ORDER BY r.name ASC`
+        );
+
+        res.json({
+            retailers: result.rows,
+            count: result.rows.length
+        });
+    } catch (err) {
+        console.error('Get retailers error:', err);
+        res.status(500).json({ error: 'Failed to fetch retailers', details: err.message });
+    }
+});
+
 // Get all batches (filtered by role)
 router.get('/', authenticate, async (req, res) => {
     try {
@@ -588,6 +608,23 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
         const { batchId } = req.params;
         const { latitude, longitude, retailerId, notes } = req.body;
 
+        // VALIDATION: Retailer must be specified for delivery
+        if (!retailerId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: 'Retailer ID required',
+                message: 'You must specify which retailer you are delivering to'
+            });
+        }
+
+        // Validate retailer exists
+        const retailerCheck = await client.query('SELECT * FROM retailers WHERE id = $1', [retailerId]);
+        if (retailerCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Retailer not found' });
+        }
+        const targetRetailer = retailerCheck.rows[0];
+
         const batchResult = await client.query('SELECT * FROM batches WHERE batch_id = $1', [batchId]);
 
         if (batchResult.rows.length === 0) {
@@ -605,6 +642,12 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
         const driverResult = await client.query('SELECT * FROM drivers WHERE user_id = $1', [req.user.id]);
         const driver = driverResult.rows[0];
 
+        // VALIDATION: Driver must be the current owner
+        if (batch.current_owner_type !== 'driver' || batch.current_owner_id !== driver.id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'You are not the current owner of this batch' });
+        }
+
         // Upload image if present
         let imageUrls = [];
         if (req.file) {
@@ -621,14 +664,17 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
             console.log(`⏱️ Transit duration for ${batchId}: ${transitDuration} hours`);
         }
 
-        // Update batch with transit_end_time and duration
+        // Update batch with delivery info, pending retailer, and delivery location
         await client.query(
             `UPDATE batches SET 
                 status = 'delivered', 
                 transit_end_time = NOW(),
-                transit_duration = $2
+                transit_duration = $2,
+                pending_retailer_id = $3,
+                delivery_latitude = $4,
+                delivery_longitude = $5
             WHERE id = $1`,
-            [batch.id, transitDuration]
+            [batch.id, transitDuration, retailerId, parseFloat(latitude) || null, parseFloat(longitude) || null]
         );
 
         // Create journey event
@@ -665,6 +711,9 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
             console.log('⚠️ Blockchain write failed (continuing with PostgreSQL):', fabricErr.message);
         }
 
+        // CRITICAL: Commit the transaction
+        await client.query('COMMIT');
+
         res.json({
             message: 'Batch delivered successfully',
             batch_id: batchId,
@@ -672,8 +721,11 @@ router.post('/:batchId/deliver', authenticate, requireRole('driver'), upload.any
             blockchain_tx_id: blockchainTxId,
         });
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Deliver error:', err);
         res.status(500).json({ error: 'Failed to deliver batch', details: err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -694,9 +746,14 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
 
         const batch = batchResult.rows[0];
 
-        if (batch.status !== 'delivered' && batch.status !== 'in_transit') {
+        // VALIDATION: Batch must be in 'delivered' status (driver must deliver first)
+        if (batch.status !== 'delivered') {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Batch cannot be received in current status', status: batch.status });
+            return res.status(400).json({
+                error: 'Batch not delivered yet',
+                message: 'The driver must mark this batch as delivered before you can receive it',
+                current_status: batch.status
+            });
         }
 
         // Get or create retailer profile
@@ -710,6 +767,15 @@ router.post('/:batchId/receive', authenticate, requireRole('retailer'), async (r
         }
 
         const retailer = retailerResult.rows[0];
+
+        // VALIDATION: Only the designated retailer can receive this batch
+        if (batch.pending_retailer_id && batch.pending_retailer_id !== retailer.id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({
+                error: 'Not authorized to receive this batch',
+                message: 'This batch was delivered to a different retailer'
+            });
+        }
 
         // Update batch
         await client.query(

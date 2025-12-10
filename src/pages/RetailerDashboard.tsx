@@ -247,7 +247,7 @@ const RetailerDashboard: React.FC = () => {
                                     />
                                 </div>
 
-                                {(loadedBatch.status === 'delivered' || loadedBatch.status === 'in_transit') && (
+                                {loadedBatch.status === 'delivered' && (
                                     <Button
                                         onClick={handleReceive}
                                         className="w-full bg-green-600 hover:bg-green-700"
@@ -256,6 +256,28 @@ const RetailerDashboard: React.FC = () => {
                                         <CheckCircle className="h-4 w-4 mr-2" />
                                         {isProcessing ? 'Processing...' : 'Confirm Receipt'}
                                     </Button>
+                                )}
+
+                                {loadedBatch.status === 'in_transit' && (
+                                    <div className="text-center py-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                        <p className="text-yellow-700 font-medium">
+                                            ⏳ Awaiting Driver Delivery
+                                        </p>
+                                        <p className="text-sm text-yellow-600">
+                                            The driver must mark this batch as delivered before you can receive it
+                                        </p>
+                                    </div>
+                                )}
+
+                                {loadedBatch.status === 'created' && (
+                                    <div className="text-center py-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <p className="text-blue-700 font-medium">
+                                            📦 Not Yet Picked Up
+                                        </p>
+                                        <p className="text-sm text-blue-600">
+                                            This batch is still with the farmer
+                                        </p>
+                                    </div>
                                 )}
 
                                 {loadedBatch.status === 'received' && (
