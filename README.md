@@ -67,3 +67,23 @@ TraceSafe is a next-generation supply chain management system designed to bring 
 *   **Farmer:** Login via AgriStack ID
 *   **Retailer:** `retailer@tracesafe.com`
 *   **Driver:** `driver@tracesafe.com`
+
+## Screen
+
+### Landing & Authentication
+![TraceSafe Login](https://res.cloudinary.com/dukjtmdtn/image/upload/v1765949710/1_mjucqb.jpg)
+### 🔗 Blockchain Integration (Hyperledger Fabric)
+![Admin Dashboard – Batches](https://res.cloudinary.com/dukjtmdtn/image/upload/v1765949715/2_alksw3.jpg)
+### 🏅 Smart Certification
+![Batch Certification](https://res.cloudinary.com/dukjtmdtn/image/upload/v1765949722/4_p6b5l3.jpg)
+### 🛡️ Integrity Verification
+![Integrity Verification](https://res.cloudinary.com/dukjtmdtn/image/upload/v1765949728/7_hfmkce.jpg)
+### 🚜 Farmer-Centric Design
+![Farmer Dashboard](https://res.cloudinary.com/dukjtmdtn/image/upload/v1765949737/WhatsApp_Image_2025-12-10_at_2.19.19_PM_ica7da.jpg)
+### 📦 Batch Creation & Evidence Capture
+![Create Batch](https://res.cloudinary.com/dukjtmdtn/image/upload/v1765949745/WhatsApp_Image_2025-12-10_at_2.22.17_PM_cgatlw.jpg)
+### 🧭 Complete Journey Tracking
+![Journey Timeline](https://res.cloudinary.com/dukjtmdtn/image/upload/v1765949752/WhatsApp_Image_2025-12-10_at_2.24.39_PM_ykezrz.jpg)
+### 🏆 Hackathon Recognition
+![GLYTCH Certificate](https://res.cloudinary.com/dukjtmdtn/image/upload/v1765949768/WhatsApp_Image_2025-12-10_at_2.26.26_PM_npqw9t.jpg)
+
